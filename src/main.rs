@@ -78,7 +78,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         while let Ok(event) = event_manager.receiver().recv() {
             let _ = dispatch_tx.send(event);
             let rx_clone = rx_for_loop.clone();
-            let _ = slint::invoke_from_event_loop(move || {
+            let invoke_res = slint::invoke_from_event_loop(move || {
                 APP_INSTANCE.with(|cell| {
                     if let Some(ref app_rc) = *cell.borrow() {
                         if let Ok(rx) = rx_clone.try_lock() {
@@ -89,11 +89,16 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     }
                 });
             });
+            if let Err(e) = invoke_res {
+                eprintln!("invoke_from_event_loop hatası: {:?}", e);
+            }
         }
     });
 
-    // 6. Run Native Slint Event Loop
-    let res = slint::run_event_loop();
+    // 6. Run Native Slint Event Loop in DAEMON mode (never quit when windows close/hide)
+    // CRITICAL: run_event_loop_until_quit() keeps the event loop alive indefinitely
+    // even when all windows are hidden, until quit_event_loop() is explicitly called on exit.
+    let res = slint::run_event_loop_until_quit();
 
     // 7. Cleanup
     APP_INSTANCE.with(|cell| {

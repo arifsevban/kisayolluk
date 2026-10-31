@@ -76,27 +76,43 @@ impl SystemTray {
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, sender_ptr as isize);
 
             // Create Tray Icon
-            let icon = LoadIconW(None, IDI_APPLICATION).unwrap_or(HICON(std::ptr::null_mut()));
+            let icon = LoadIconW(None, IDI_APPLICATION)
+                .or_else(|_| LoadIconW(None, IDI_ASTERISK))
+                .unwrap_or(HICON(std::ptr::null_mut()));
             let mut tip = [0u16; 128];
             let tip_str = "Kısayolluk - Radyal İşlem Aracı";
             for (i, c) in tip_str.encode_utf16().enumerate().take(127) {
                 tip[i] = c;
             }
 
+            let mut flags = NIF_MESSAGE | NIF_TIP;
+            if !icon.is_invalid() && !icon.0.is_null() {
+                flags |= NIF_ICON;
+            }
+
             let nid = NOTIFYICONDATAW {
                 cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
                 hWnd: hwnd,
                 uID: 1,
-                uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP,
+                uFlags: flags,
                 uCallbackMessage: WM_TRAY_CALLBACK,
                 hIcon: icon,
                 szTip: tip,
                 ..Default::default()
             };
 
-            let added = Shell_NotifyIconW(NIM_ADD, &nid);
-            if !added.as_bool() {
-                let _ = ready_tx.send(Err("Sistem tepsisi simgesi eklenemedi.".to_string()));
+            let mut added = false;
+            for _ in 0..5 {
+                if Shell_NotifyIconW(NIM_ADD, &nid).as_bool() {
+                    added = true;
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+
+            if !added {
+                let err = windows::Win32::Foundation::GetLastError();
+                let _ = ready_tx.send(Err(format!("Sistem tepsisi simgesi eklenemedi (err: {:?}, icon: {:?}).", err, icon.0)));
                 return;
             }
 

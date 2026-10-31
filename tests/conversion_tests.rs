@@ -77,7 +77,7 @@ fn test_real_image_conversion() {
 
     // 1. Create a 100x80 test PNG image with transparent pixels
     let mut img: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(100, 80);
-    for (x, y, pixel) in img.enumerate_pixels_mut() {
+    for (x, _y, pixel) in img.enumerate_pixels_mut() {
         if x < 50 {
             *pixel = Rgba([255, 0, 0, 255]); // Opaque Red
         } else {
