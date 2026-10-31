@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use windows::core::*;
 use windows::Win32::Foundation::*;
@@ -11,6 +12,10 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 use kisayolluk::config::persistence::load_settings;
 use kisayolluk::core::event_manager::EventManager;
 use kisayolluk::app::KisayollukApp;
+
+thread_local! {
+    static APP_INSTANCE: RefCell<Option<Rc<RefCell<KisayollukApp>>>> = RefCell::new(None);
+}
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // 0. Default to lightweight software backend if not explicitly set (ensures ~20 MB idle RAM)
@@ -59,29 +64,42 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // Store in thread_local on the Slint main thread
+    APP_INSTANCE.with(|cell| {
+        *cell.borrow_mut() = Some(app.clone());
+    });
+
     // 5. Connect Background Event Channel to Slint Main Thread
     let (dispatch_tx, dispatch_rx) = std::sync::mpsc::channel();
+    let rx_arc = Arc::new(Mutex::new(dispatch_rx));
+    let rx_for_loop = rx_arc.clone();
 
     thread::spawn(move || {
         while let Ok(event) = event_manager.receiver().recv() {
             let _ = dispatch_tx.send(event);
-            let _ = slint::invoke_from_event_loop(|| {});
-        }
-    });
-
-    // Event pump on main thread
-    let timer = slint::Timer::default();
-    let app_clone = app.clone();
-    timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(16), move || {
-        while let Ok(event) = dispatch_rx.try_recv() {
-            app_clone.borrow_mut().handle_event(event);
+            let rx_clone = rx_for_loop.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                APP_INSTANCE.with(|cell| {
+                    if let Some(ref app_rc) = *cell.borrow() {
+                        if let Ok(rx) = rx_clone.try_lock() {
+                            while let Ok(ev) = rx.try_recv() {
+                                app_rc.borrow_mut().handle_event(ev);
+                            }
+                        }
+                    }
+                });
+            });
         }
     });
 
     // 6. Run Native Slint Event Loop
     let res = slint::run_event_loop();
 
-    // 7. Cleanup Mutex on exit
+    // 7. Cleanup
+    APP_INSTANCE.with(|cell| {
+        *cell.borrow_mut() = None;
+    });
+
     if let Ok(h_mutex) = mutex {
         unsafe {
             let _ = ReleaseMutex(h_mutex);

@@ -1,19 +1,19 @@
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use windows::Win32::Foundation::*;
+use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 static HOOK_ENABLED: AtomicBool = AtomicBool::new(true);
-static DOUBLE_CLICK_TIME_MS: AtomicI32 = AtomicI32::new(400);
+static DOUBLE_CLICK_TIME_MS: AtomicI32 = AtomicI32::new(450);
 
 static LAST_RCLICK_X: AtomicI32 = AtomicI32::new(0);
 static LAST_RCLICK_Y: AtomicI32 = AtomicI32::new(0);
+static LAST_RCLICK_TIME_MS: AtomicU64 = AtomicU64::new(0);
 
-static LAST_RCLICK_INSTANT: Mutex<Option<Instant>> = Mutex::new(None);
 static mut EVENT_SENDER: Option<Sender<(i32, i32)>> = None;
 static mut HOOK_HANDLE: HHOOK = HHOOK(std::ptr::null_mut());
 
@@ -104,33 +104,30 @@ unsafe extern "system" fn low_level_mouse_proc(
             let x = ms_hook.pt.x;
             let y = ms_hook.pt.y;
 
-            let now = Instant::now();
-            let mut last_opt = LAST_RCLICK_INSTANT.lock().unwrap();
-
+            let now_ms = GetTickCount64();
+            let last_ms = LAST_RCLICK_TIME_MS.load(Ordering::Relaxed);
             let last_x = LAST_RCLICK_X.load(Ordering::Relaxed);
             let last_y = LAST_RCLICK_Y.load(Ordering::Relaxed);
-            let max_time_ms = DOUBLE_CLICK_TIME_MS.load(Ordering::Relaxed) as u128;
 
-            let max_dx = GetSystemMetrics(SM_CXDOUBLECLK);
-            let max_dy = GetSystemMetrics(SM_CYDOUBLECLK);
+            let max_time_ms = (DOUBLE_CLICK_TIME_MS.load(Ordering::Relaxed) as u64).max(500);
+            let elapsed = now_ms.saturating_sub(last_ms);
 
-            let is_double_click = if let Some(last_time) = *last_opt {
-                let elapsed = now.duration_since(last_time).as_millis();
-                elapsed > 50
-                    && elapsed <= max_time_ms
-                    && (x - last_x).abs() <= max_dx
-                    && (y - last_y).abs() <= max_dy
-            } else {
-                false
-            };
+            // Generous spatial tolerance for right-click: at least 24px
+            let max_dx = (GetSystemMetrics(SM_CXDOUBLECLK) * 3).max(24);
+            let max_dy = (GetSystemMetrics(SM_CYDOUBLECLK) * 3).max(24);
+
+            let is_double_click = elapsed >= 20
+                && elapsed <= max_time_ms
+                && (x - last_x).abs() <= max_dx
+                && (y - last_y).abs() <= max_dy;
 
             if is_double_click {
-                *last_opt = None;
+                LAST_RCLICK_TIME_MS.store(0, Ordering::Relaxed);
                 if let Some(ref sender) = EVENT_SENDER {
                     let _ = sender.send((x, y));
                 }
             } else {
-                *last_opt = Some(now);
+                LAST_RCLICK_TIME_MS.store(now_ms, Ordering::Relaxed);
                 LAST_RCLICK_X.store(x, Ordering::Relaxed);
                 LAST_RCLICK_Y.store(y, Ordering::Relaxed);
             }

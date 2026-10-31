@@ -128,6 +128,9 @@ impl KisayollukApp {
                     return;
                 }
 
+                // Hide previous menu/toast before querying so our own window doesn't interfere
+                self.radial_ui.hide();
+
                 let start_time = Instant::now();
                 let resolution = resolve_selected_file();
                 let elapsed_ms = start_time.elapsed().as_millis();

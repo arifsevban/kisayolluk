@@ -583,6 +583,15 @@ impl RadialMenuController {
         self.window.window().set_position(slint::PhysicalPosition::new(pos_x, pos_y));
 
         let _ = self.window.show();
+
+        let win_weak = self.window.as_weak();
+        slint::Timer::single_shot(std::time::Duration::from_millis(3500), move || {
+            if let Some(win) = win_weak.upgrade() {
+                if win.get_has_toast() {
+                    let _ = win.hide();
+                }
+            }
+        });
     }
 
     pub fn hide(&self) {
