@@ -571,6 +571,8 @@ impl RadialMenuController {
         let pos_y = (y - half_h).max(20);
         self.window.window().set_position(slint::PhysicalPosition::new(pos_x, pos_y));
 
+        crate::platform::windows::mouse_hook::set_menu_bounds(true, pos_x, pos_y);
+
         let _ = self.window.show();
     }
 
@@ -586,12 +588,15 @@ impl RadialMenuController {
         let pos_y = (y - half_h).max(20);
         self.window.window().set_position(slint::PhysicalPosition::new(pos_x, pos_y));
 
+        crate::platform::windows::mouse_hook::set_menu_bounds(true, pos_x, pos_y);
+
         let _ = self.window.show();
 
         let win_weak = self.window.as_weak();
         slint::Timer::single_shot(std::time::Duration::from_millis(3500), move || {
             if let Some(win) = win_weak.upgrade() {
                 if win.get_has_toast() {
+                    crate::platform::windows::mouse_hook::set_menu_closed();
                     let _ = win.hide();
                 }
             }
@@ -599,6 +604,7 @@ impl RadialMenuController {
     }
 
     pub fn hide(&self) {
+        crate::platform::windows::mouse_hook::set_menu_closed();
         let _ = self.window.hide();
     }
 }

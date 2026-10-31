@@ -1,5 +1,5 @@
 use std::sync::mpsc::Sender;
-use crate::platform::windows::mouse_hook::{start_mouse_hook, MouseHookHandle};
+use crate::platform::windows::mouse_hook::{start_mouse_hook, MouseEvent, MouseHookHandle};
 
 pub struct MouseManager {
     handle: Option<MouseHookHandle>,
@@ -10,7 +10,7 @@ impl MouseManager {
         Self { handle: None }
     }
 
-    pub fn start(&mut self, sender: Sender<(i32, i32)>) -> Result<(), String> {
+    pub fn start(&mut self, sender: Sender<MouseEvent>) -> Result<(), String> {
         let handle = start_mouse_hook(sender)?;
         self.handle = Some(handle);
         Ok(())

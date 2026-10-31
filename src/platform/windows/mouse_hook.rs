@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -9,11 +9,21 @@ use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MouseEvent {
+    CtrlRightClick { x: i32, y: i32 },
+    OutsideClick,
+}
+
 static HOOK_ENABLED: AtomicBool = AtomicBool::new(true);
 static WAS_CTRL_RCLICK_DOWN: AtomicBool = AtomicBool::new(false);
 static LAST_HOOK_DURATION_NS: AtomicU64 = AtomicU64::new(0);
 
-static mut EVENT_SENDER: Option<Sender<(i32, i32)>> = None;
+static MENU_OPEN: AtomicBool = AtomicBool::new(false);
+static MENU_POS_X: AtomicI32 = AtomicI32::new(0);
+static MENU_POS_Y: AtomicI32 = AtomicI32::new(0);
+
+static mut EVENT_SENDER: Option<Sender<MouseEvent>> = None;
 static mut HOOK_HANDLE: HHOOK = HHOOK(std::ptr::null_mut());
 
 pub struct MouseHookHandle {
@@ -45,7 +55,17 @@ pub fn get_last_hook_duration_ns() -> u64 {
     LAST_HOOK_DURATION_NS.load(Ordering::Relaxed)
 }
 
-pub fn start_mouse_hook(sender: Sender<(i32, i32)>) -> std::result::Result<MouseHookHandle, String> {
+pub fn set_menu_bounds(open: bool, pos_x: i32, pos_y: i32) {
+    MENU_POS_X.store(pos_x, Ordering::Relaxed);
+    MENU_POS_Y.store(pos_y, Ordering::Relaxed);
+    MENU_OPEN.store(open, Ordering::Relaxed);
+}
+
+pub fn set_menu_closed() {
+    MENU_OPEN.store(false, Ordering::Relaxed);
+}
+
+pub fn start_mouse_hook(sender: Sender<MouseEvent>) -> std::result::Result<MouseHookHandle, String> {
     unsafe {
         EVENT_SENDER = Some(sender);
     }
@@ -118,6 +138,35 @@ unsafe extern "system" fn low_level_mouse_proc(
         if n_code >= 0 && HOOK_ENABLED.load(Ordering::Relaxed) {
             let msg = w_param.0 as u32;
 
+            // 1. Outside Click Detection: close menu if user clicks outside the radial menu bounds
+            if MENU_OPEN.load(Ordering::Relaxed) {
+                if msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN {
+                    let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
+                    let click_x = ms_hook.pt.x;
+                    let click_y = ms_hook.pt.y;
+
+                    let menu_x = MENU_POS_X.load(Ordering::Relaxed);
+                    let menu_y = MENU_POS_Y.load(Ordering::Relaxed);
+
+                    // Circular menu has radius 165px centered at (menu_x + 180, menu_y + 180)
+                    let center_x = menu_x + 180;
+                    let center_y = menu_y + 180;
+                    let dx = click_x - center_x;
+                    let dy = click_y - center_y;
+                    let dist_sq = dx * dx + dy * dy;
+
+                    // If click is outside the 170px radius circular menu:
+                    if dist_sq > 170 * 170 {
+                        if MENU_OPEN.swap(false, Ordering::Relaxed) {
+                            if let Some(ref sender) = EVENT_SENDER {
+                                let _ = sender.send(MouseEvent::OutsideClick);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Ctrl + Right Click Activation:
             if msg == WM_RBUTTONDOWN {
                 if is_ctrl_down() {
                     WAS_CTRL_RCLICK_DOWN.store(true, Ordering::Relaxed);
@@ -138,7 +187,7 @@ unsafe extern "system" fn low_level_mouse_proc(
                     let y = ms_hook.pt.y;
 
                     if let Some(ref sender) = EVENT_SENDER {
-                        let _ = sender.send((x, y));
+                        let _ = sender.send(MouseEvent::CtrlRightClick { x, y });
                     }
 
                     return LRESULT(1);
@@ -151,7 +200,7 @@ unsafe extern "system" fn low_level_mouse_proc(
                     let y = ms_hook.pt.y;
 
                     if let Some(ref sender) = EVENT_SENDER {
-                        let _ = sender.send((x, y));
+                        let _ = sender.send(MouseEvent::CtrlRightClick { x, y });
                     }
 
                     // CRITICAL: DO NOT return LRESULT(1) here!

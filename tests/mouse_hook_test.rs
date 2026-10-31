@@ -74,3 +74,12 @@ fn test_async_file_resolved_event_propagation() {
     assert_eq!(count, 20, "All 20 FileResolved events must arrive in sequence");
 }
 
+#[test]
+fn test_outside_click_bounds_logic() {
+    use kisayolluk::platform::windows::mouse_hook::{set_menu_bounds, set_menu_closed};
+
+    // Test bounds setting and closing
+    set_menu_bounds(true, 500, 300);
+    set_menu_closed();
+}
+

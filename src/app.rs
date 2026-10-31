@@ -51,8 +51,15 @@ impl KisayollukApp {
             .map_err(|e| format!("Mouse yöneticisi başlatılamadı: {}", e))?;
 
         thread::spawn(move || {
-            while let Ok((x, y)) = mouse_rx.recv() {
-                let _ = es_mouse.send(AppEvent::CtrlRightClick { x, y });
+            while let Ok(event) = mouse_rx.recv() {
+                match event {
+                    crate::platform::windows::mouse_hook::MouseEvent::CtrlRightClick { x, y } => {
+                        let _ = es_mouse.send(AppEvent::CtrlRightClick { x, y });
+                    }
+                    crate::platform::windows::mouse_hook::MouseEvent::OutsideClick => {
+                        let _ = es_mouse.send(AppEvent::CloseMenu);
+                    }
+                }
             }
         });
 
@@ -253,6 +260,7 @@ impl KisayollukApp {
 
             AppEvent::CloseMenu => {
                 self.state.set_menu_open(false);
+                crate::platform::windows::mouse_hook::set_menu_closed();
                 self.radial_ui.hide();
                 if let Some(ref path) = self.last_converted_path.take() {
                     NotificationManager::open_in_explorer(path);
