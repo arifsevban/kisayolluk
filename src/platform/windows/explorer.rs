@@ -80,10 +80,28 @@ fn extract_selection_from_dispatch(disp: &IDispatch) -> FileResolverResult {
     }
 }
 
-pub fn get_explorer_selection() -> FileResolverResult {
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+struct ComGuard(bool);
 
+impl ComGuard {
+    fn new() -> Self {
+        let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        Self(hr.is_ok())
+    }
+}
+
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        if self.0 {
+            unsafe {
+                CoUninitialize();
+            }
+        }
+    }
+}
+
+pub fn get_explorer_selection() -> FileResolverResult {
+    let _com = ComGuard::new();
+    unsafe {
         let sw: Result<IShellWindows> = CoCreateInstance(&ShellWindows, None, CLSCTX_ALL);
         let sw = match sw {
             Ok(s) => s,

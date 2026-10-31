@@ -131,18 +131,23 @@ impl KisayollukApp {
                 // Hide previous menu/toast before querying so our own window doesn't interfere
                 self.radial_ui.hide();
 
-                let start_time = Instant::now();
-                let resolution = resolve_selected_file();
-                let elapsed_ms = start_time.elapsed().as_millis();
+                let es_clone = self._event_sender.clone();
+                thread::spawn(move || {
+                    let start_time = Instant::now();
+                    let resolution = resolve_selected_file();
+                    let elapsed_ms = start_time.elapsed().as_millis();
+                    println!("Dosya algılama tamamlandı: {} ms", elapsed_ms);
+                    es_clone.send(AppEvent::FileResolved {
+                        resolution,
+                        x,
+                        y,
+                    });
+                });
+            }
 
+            AppEvent::FileResolved { resolution, x, y } => {
                 match resolution {
                     FileResolverResult::Selected(ctx) => {
-                        println!(
-                            "Seçili dosya algılandı ({} ms): {}",
-                            elapsed_ms,
-                            ctx.path.display()
-                        );
-
                         if ctx.is_directory {
                             self.radial_ui.show_toast(
                                 "Klasör seçildi. Dönüştürmek için bir görsel dosyası seçin.",

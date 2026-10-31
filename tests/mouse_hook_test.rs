@@ -49,3 +49,28 @@ fn test_ctrl_right_click_event_channel_capacity_and_repeatability() {
     assert_eq!(count, 25, "All 25 consecutive CtrlRightClick events must be received accurately");
 }
 
+#[test]
+fn test_async_file_resolved_event_propagation() {
+    let event_manager = EventManager::new();
+    let sender = event_manager.get_sender();
+
+    // Verify 20 consecutive FileResolved cycles execute without deadlock
+    for i in 1..=20 {
+        sender.send(AppEvent::FileResolved {
+            resolution: kisayolluk::files::resolver::FileResolverResult::NoSelection,
+            x: 200 + i,
+            y: 300 + i,
+        });
+    }
+
+    let mut count = 0;
+    while let Ok(event) = event_manager.receiver().try_recv() {
+        if let AppEvent::FileResolved { x, y, .. } = event {
+            count += 1;
+            assert_eq!(x, 200 + count);
+            assert_eq!(y, 300 + count);
+        }
+    }
+    assert_eq!(count, 20, "All 20 FileResolved events must arrive in sequence");
+}
+

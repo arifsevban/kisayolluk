@@ -2,10 +2,16 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::config::settings::AppSettings;
 use crate::files::file_type::SupportedImageFormat;
+use crate::files::resolver::FileResolverResult;
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     CtrlRightClick { x: i32, y: i32 },
+    FileResolved {
+        resolution: FileResolverResult,
+        x: i32,
+        y: i32,
+    },
     ToggleEnabled,
     OpenSettings,
     CloseMenu,

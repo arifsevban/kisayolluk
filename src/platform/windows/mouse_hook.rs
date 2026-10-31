@@ -1,14 +1,17 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use windows::core::PCWSTR;
 use windows::Win32::Foundation::*;
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 static HOOK_ENABLED: AtomicBool = AtomicBool::new(true);
 static WAS_CTRL_RCLICK_DOWN: AtomicBool = AtomicBool::new(false);
+static LAST_HOOK_DURATION_NS: AtomicU64 = AtomicU64::new(0);
 
 static mut EVENT_SENDER: Option<Sender<(i32, i32)>> = None;
 static mut HOOK_HANDLE: HHOOK = HHOOK(std::ptr::null_mut());
@@ -38,6 +41,10 @@ impl MouseHookHandle {
     }
 }
 
+pub fn get_last_hook_duration_ns() -> u64 {
+    LAST_HOOK_DURATION_NS.load(Ordering::Relaxed)
+}
+
 pub fn start_mouse_hook(sender: Sender<(i32, i32)>) -> std::result::Result<MouseHookHandle, String> {
     unsafe {
         EVENT_SENDER = Some(sender);
@@ -47,10 +54,19 @@ pub fn start_mouse_hook(sender: Sender<(i32, i32)>) -> std::result::Result<Mouse
 
     let thread_handle = thread::spawn(move || unsafe {
         let thread_id = GetCurrentThreadId();
+
+        // 1. Ensure message queue exists for this thread before registering hook
+        let mut msg = MSG::default();
+        let _ = PeekMessageW(&mut msg, None, 0, 0, PM_NOREMOVE);
+
+        // 2. Obtain current module handle for global hook registration
+        let hinstance = GetModuleHandleW(PCWSTR::null()).unwrap_or_default();
+        let hinstance_cast = HINSTANCE(hinstance.0);
+
         let hook = SetWindowsHookExW(
             WH_MOUSE_LL,
             Some(low_level_mouse_proc),
-            None,
+            Some(hinstance_cast),
             0,
         );
 
@@ -65,7 +81,6 @@ pub fn start_mouse_hook(sender: Sender<(i32, i32)>) -> std::result::Result<Mouse
             }
         }
 
-        let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
@@ -97,35 +112,45 @@ unsafe extern "system" fn low_level_mouse_proc(
     w_param: WPARAM,
     l_param: LPARAM,
 ) -> LRESULT {
-    if n_code >= 0 && HOOK_ENABLED.load(Ordering::Relaxed) {
-        let msg = w_param.0 as u32;
+    let start = Instant::now();
 
-        if msg == WM_RBUTTONDOWN {
-            if is_ctrl_down() {
-                WAS_CTRL_RCLICK_DOWN.store(true, Ordering::Relaxed);
-                // Swallow WM_RBUTTONDOWN so Windows doesn't initiate a context menu or selection focus
-                return LRESULT(1);
-            } else {
+    let result = (|| {
+        if n_code >= 0 && HOOK_ENABLED.load(Ordering::Relaxed) {
+            let msg = w_param.0 as u32;
+
+            if msg == WM_RBUTTONDOWN {
+                if is_ctrl_down() {
+                    WAS_CTRL_RCLICK_DOWN.store(true, Ordering::Relaxed);
+                    // Swallow WM_RBUTTONDOWN so Windows doesn't initiate a context menu or selection focus
+                    return LRESULT(1);
+                } else {
+                    WAS_CTRL_RCLICK_DOWN.store(false, Ordering::Relaxed);
+                }
+            } else if msg == WM_RBUTTONUP {
+                let was_down = WAS_CTRL_RCLICK_DOWN.swap(false, Ordering::Relaxed);
+                let ctrl_active = is_ctrl_down();
+
+                if was_down || ctrl_active {
+                    let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
+                    let x = ms_hook.pt.x;
+                    let y = ms_hook.pt.y;
+
+                    if let Some(ref sender) = EVENT_SENDER {
+                        let _ = sender.send((x, y));
+                    }
+
+                    // Swallow WM_RBUTTONUP so Windows never displays the native context menu
+                    return LRESULT(1);
+                }
+            } else if msg == WM_LBUTTONDOWN || msg == WM_MBUTTONDOWN {
+                // Clear any pending state if user clicks left/middle button
                 WAS_CTRL_RCLICK_DOWN.store(false, Ordering::Relaxed);
             }
-        } else if msg == WM_RBUTTONUP {
-            let was_down = WAS_CTRL_RCLICK_DOWN.swap(false, Ordering::Relaxed);
-            let ctrl_active = is_ctrl_down();
-
-            if was_down || ctrl_active {
-                let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
-                let x = ms_hook.pt.x;
-                let y = ms_hook.pt.y;
-
-                if let Some(ref sender) = EVENT_SENDER {
-                    let _ = sender.send((x, y));
-                }
-
-                // Swallow WM_RBUTTONUP so Windows never displays the native context menu
-                return LRESULT(1);
-            }
         }
-    }
 
-    CallNextHookEx(Some(HOOK_HANDLE), n_code, w_param, l_param)
+        CallNextHookEx(None, n_code, w_param, l_param)
+    })();
+
+    LAST_HOOK_DURATION_NS.store(start.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    result
 }
