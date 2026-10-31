@@ -52,7 +52,7 @@ impl KisayollukApp {
 
         thread::spawn(move || {
             while let Ok((x, y)) = mouse_rx.recv() {
-                let _ = es_mouse.send(AppEvent::DoubleRightClick { x, y });
+                let _ = es_mouse.send(AppEvent::CtrlRightClick { x, y });
             }
         });
 
@@ -121,7 +121,7 @@ impl KisayollukApp {
 
     pub fn handle_event(&mut self, event: AppEvent) {
         match event {
-            AppEvent::DoubleRightClick { x, y } => {
+            AppEvent::CtrlRightClick { x, y } => {
                 self.last_click_pos = (x, y);
 
                 if !self.state.is_enabled() {

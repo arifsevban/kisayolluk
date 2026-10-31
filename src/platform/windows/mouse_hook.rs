@@ -1,18 +1,14 @@
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use windows::Win32::Foundation::*;
-use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::System::Threading::GetCurrentThreadId;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 static HOOK_ENABLED: AtomicBool = AtomicBool::new(true);
-static DOUBLE_CLICK_TIME_MS: AtomicI32 = AtomicI32::new(450);
-
-static LAST_RCLICK_X: AtomicI32 = AtomicI32::new(0);
-static LAST_RCLICK_Y: AtomicI32 = AtomicI32::new(0);
-static LAST_RCLICK_TIME_MS: AtomicU64 = AtomicU64::new(0);
+static WAS_CTRL_RCLICK_DOWN: AtomicBool = AtomicBool::new(false);
 
 static mut EVENT_SENDER: Option<Sender<(i32, i32)>> = None;
 static mut HOOK_HANDLE: HHOOK = HHOOK(std::ptr::null_mut());
@@ -27,9 +23,8 @@ impl MouseHookHandle {
         HOOK_ENABLED.store(enabled, Ordering::SeqCst);
     }
 
-    pub fn set_double_click_time_ms(&self, ms: u64) {
-        DOUBLE_CLICK_TIME_MS.store(ms as i32, Ordering::SeqCst);
-    }
+    /// Kept for API compatibility; double-click logic has been replaced with Ctrl + Right Click.
+    pub fn set_double_click_time_ms(&self, _ms: u64) {}
 
     pub fn stop(mut self) {
         if self.thread_id != 0 {
@@ -92,6 +87,11 @@ pub fn start_mouse_hook(sender: Sender<(i32, i32)>) -> std::result::Result<Mouse
     }
 }
 
+#[inline]
+unsafe fn is_ctrl_down() -> bool {
+    (GetAsyncKeyState(VK_CONTROL.0 as i32) as u16 & 0x8000) != 0
+}
+
 unsafe extern "system" fn low_level_mouse_proc(
     n_code: i32,
     w_param: WPARAM,
@@ -99,37 +99,30 @@ unsafe extern "system" fn low_level_mouse_proc(
 ) -> LRESULT {
     if n_code >= 0 && HOOK_ENABLED.load(Ordering::Relaxed) {
         let msg = w_param.0 as u32;
-        if msg == WM_RBUTTONUP {
-            let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
-            let x = ms_hook.pt.x;
-            let y = ms_hook.pt.y;
 
-            let now_ms = GetTickCount64();
-            let last_ms = LAST_RCLICK_TIME_MS.load(Ordering::Relaxed);
-            let last_x = LAST_RCLICK_X.load(Ordering::Relaxed);
-            let last_y = LAST_RCLICK_Y.load(Ordering::Relaxed);
+        if msg == WM_RBUTTONDOWN {
+            if is_ctrl_down() {
+                WAS_CTRL_RCLICK_DOWN.store(true, Ordering::Relaxed);
+                // Swallow WM_RBUTTONDOWN so Windows doesn't initiate a context menu or selection focus
+                return LRESULT(1);
+            } else {
+                WAS_CTRL_RCLICK_DOWN.store(false, Ordering::Relaxed);
+            }
+        } else if msg == WM_RBUTTONUP {
+            let was_down = WAS_CTRL_RCLICK_DOWN.swap(false, Ordering::Relaxed);
+            let ctrl_active = is_ctrl_down();
 
-            let max_time_ms = (DOUBLE_CLICK_TIME_MS.load(Ordering::Relaxed) as u64).max(500);
-            let elapsed = now_ms.saturating_sub(last_ms);
+            if was_down || ctrl_active {
+                let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
+                let x = ms_hook.pt.x;
+                let y = ms_hook.pt.y;
 
-            // Generous spatial tolerance for right-click: at least 24px
-            let max_dx = (GetSystemMetrics(SM_CXDOUBLECLK) * 3).max(24);
-            let max_dy = (GetSystemMetrics(SM_CYDOUBLECLK) * 3).max(24);
-
-            let is_double_click = elapsed >= 20
-                && elapsed <= max_time_ms
-                && (x - last_x).abs() <= max_dx
-                && (y - last_y).abs() <= max_dy;
-
-            if is_double_click {
-                LAST_RCLICK_TIME_MS.store(0, Ordering::Relaxed);
                 if let Some(ref sender) = EVENT_SENDER {
                     let _ = sender.send((x, y));
                 }
-            } else {
-                LAST_RCLICK_TIME_MS.store(now_ms, Ordering::Relaxed);
-                LAST_RCLICK_X.store(x, Ordering::Relaxed);
-                LAST_RCLICK_Y.store(y, Ordering::Relaxed);
+
+                // Swallow WM_RBUTTONUP so Windows never displays the native context menu
+                return LRESULT(1);
             }
         }
     }

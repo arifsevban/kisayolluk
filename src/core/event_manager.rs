@@ -5,7 +5,7 @@ use crate::files::file_type::SupportedImageFormat;
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
-    DoubleRightClick { x: i32, y: i32 },
+    CtrlRightClick { x: i32, y: i32 },
     ToggleEnabled,
     OpenSettings,
     CloseMenu,
