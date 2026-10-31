@@ -486,7 +486,11 @@ impl RadialMenuController {
         let window = RadialMenuWindow::new()?;
 
         let sender_clone = event_sender.clone();
+        let win_weak_close = window.as_weak();
         window.on_close_requested(move || {
+            if let Some(win) = win_weak_close.upgrade() {
+                let _ = win.hide();
+            }
             let _ = sender_clone.send(AppEvent::CloseMenu);
         });
 

@@ -130,7 +130,9 @@ unsafe extern "system" fn low_level_mouse_proc(
                 let was_down = WAS_CTRL_RCLICK_DOWN.swap(false, Ordering::Relaxed);
                 let ctrl_active = is_ctrl_down();
 
-                if was_down || ctrl_active {
+                if was_down {
+                    // Paired: WM_RBUTTONDOWN was swallowed, so WM_RBUTTONUP must also be swallowed.
+                    // Windows Explorer never saw DOWN, so it never has capture.
                     let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
                     let x = ms_hook.pt.x;
                     let y = ms_hook.pt.y;
@@ -139,8 +141,21 @@ unsafe extern "system" fn low_level_mouse_proc(
                         let _ = sender.send((x, y));
                     }
 
-                    // Swallow WM_RBUTTONUP so Windows never displays the native context menu
                     return LRESULT(1);
+                } else if ctrl_active {
+                    // User pressed Right Click DOWN first, then Ctrl:
+                    // WM_RBUTTONDOWN was already sent to target window (e.g. Explorer).
+                    // We MUST pass WM_RBUTTONUP to the target window so it releases mouse capture cleanly!
+                    let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
+                    let x = ms_hook.pt.x;
+                    let y = ms_hook.pt.y;
+
+                    if let Some(ref sender) = EVENT_SENDER {
+                        let _ = sender.send((x, y));
+                    }
+
+                    // CRITICAL: DO NOT return LRESULT(1) here!
+                    // Let CallNextHookEx deliver WM_RBUTTONUP so Explorer never gets stuck in a 15-20s capture lockup!
                 }
             } else if msg == WM_LBUTTONDOWN || msg == WM_MBUTTONDOWN {
                 // Clear any pending state if user clicks left/middle button

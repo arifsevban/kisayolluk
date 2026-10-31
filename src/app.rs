@@ -128,6 +128,11 @@ impl KisayollukApp {
                     return;
                 }
 
+                // Explicitly release any active mouse capture so clicks immediately reach our UI
+                unsafe {
+                    let _ = windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture();
+                }
+
                 // Hide previous menu/toast before querying so our own window doesn't interfere
                 self.radial_ui.hide();
 
