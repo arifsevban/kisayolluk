@@ -1,0 +1,474 @@
+import { Button } from "std-widgets.slint";
+
+export struct TargetFormatItem {
+    id: string,
+    name: string,
+    extension: string,
+}
+
+export component RadialMenuWindow inherits Window {
+    width: 380px;
+    height: 380px;
+    no-frame: true;
+    background: transparent;
+    always-on-top: true;
+
+    in property <string> file_name: "test_resim.png";
+    in property <string> file_format: "PNG";
+    in property <string> file_size: "1.2 MB";
+    in property <bool> is_submenu: false;
+    in property <[TargetFormatItem]> target_formats: [
+        { id: "jpg", name: "JPG", extension: "jpg" },
+        { id: "webp", name: "WEBP", extension: "webp" },
+        { id: "bmp", name: "BMP", extension: "bmp" },
+        { id: "tiff", name: "TIFF", extension: "tiff" },
+    ];
+    in property <string> toast_message: "";
+    in property <bool> has_toast: false;
+    in property <bool> toast_is_error: false;
+    in property <bool> can_open_folder: false;
+
+    callback convert_clicked();
+    callback format_selected(string);
+    callback back_clicked();
+    callback close_requested();
+    callback open_folder_clicked();
+
+    forward-focus: key-handler;
+
+    key-handler := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.close_requested();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    // Dismiss on background click outside wheel
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => {
+            root.close_requested();
+        }
+    }
+
+    // Outer wheel wrapper
+    Rectangle {
+        width: 340px;
+        height: 340px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-radius: 170px;
+        background: #0f141ce6;
+        border-width: 1.5px;
+        border-color: #3b82f666;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: #000000bb;
+        clip: true;
+
+        // Catch clicks so they don't dismiss the window
+        TouchArea { }
+
+        // ============================================
+        // 1. MAIN 4-QUADRANT RADIAL MENU
+        // ============================================
+        if !root.is_submenu && !root.has_toast: Rectangle {
+            width: 100%;
+            height: 100%;
+
+            // TOP SLICE: "Dönüştür" (ACTIVE)
+            top-touch := TouchArea {
+                x: 20px;
+                y: 10px;
+                width: 300px;
+                height: 120px;
+                clicked => { root.convert_clicked(); }
+
+                Rectangle {
+                    width: 100%;
+                    height: 100%;
+                    background: top-touch.has-hover ? #3b82f633 : transparent;
+                    border-radius: 20px;
+                    animate background { duration: 150ms; }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        padding-top: 10px;
+
+                        Text {
+                            text: "⚡";
+                            font-size: 26px;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: "Dönüştür";
+                            font-size: 15px;
+                            font-weight: 700;
+                            color: top-touch.has-hover ? #60a5fa : #ffffff;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: "Hızlı görsel formatı değişimi";
+                            font-size: 10px;
+                            color: #94a3b8;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // RIGHT SLICE: "İşlem 2" (DISABLED)
+            Rectangle {
+                x: 210px;
+                y: 110px;
+                width: 120px;
+                height: 120px;
+                opacity: 0.35;
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 4px;
+
+                    Text {
+                        text: "📦";
+                        font-size: 22px;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "İşlem 2";
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #cbd5e1;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Yakında";
+                        font-size: 9px;
+                        color: #64748b;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            // BOTTOM SLICE: "İşlem 3" (DISABLED)
+            Rectangle {
+                x: 20px;
+                y: 210px;
+                width: 300px;
+                height: 120px;
+                opacity: 0.35;
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 4px;
+                    padding-bottom: 10px;
+
+                    Text {
+                        text: "İşlem 3";
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #cbd5e1;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "🛡️ Yakında";
+                        font-size: 10px;
+                        color: #64748b;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            // LEFT SLICE: "İşlem 4" (DISABLED)
+            Rectangle {
+                x: 10px;
+                y: 110px;
+                width: 120px;
+                height: 120px;
+                opacity: 0.35;
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 4px;
+
+                    Text {
+                        text: "✂️";
+                        font-size: 22px;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "İşlem 4";
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #cbd5e1;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Yakında";
+                        font-size: 9px;
+                        color: #64748b;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // 2. CONVERSION SUBMENU (DYNAMIC TARGET FORMATS)
+        // ============================================
+        if root.is_submenu && !root.has_toast: Rectangle {
+            width: 100%;
+            height: 100%;
+
+            // Header info inside circle
+            VerticalLayout {
+                x: 30px;
+                y: 20px;
+                width: 280px;
+                spacing: 2px;
+                alignment: start;
+
+                Text {
+                    text: "Hedef Format Seçin";
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #93c5fd;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: root.file_name;
+                    font-size: 11px;
+                    color: #cbd5e1;
+                    horizontal-alignment: center;
+                    overflow: elide;
+                }
+                Text {
+                    text: "Mevcut: " + root.file_format;
+                    font-size: 10px;
+                    color: #64748b;
+                    horizontal-alignment: center;
+                }
+            }
+
+            // Target formats grid
+            HorizontalLayout {
+                x: 25px;
+                y: 95px;
+                width: 290px;
+                height: 140px;
+                spacing: 8px;
+                alignment: center;
+
+                for item in root.target_formats: Rectangle {
+                    width: 62px;
+                    height: 120px;
+
+                    fmt-touch := TouchArea {
+                        clicked => {
+                            root.format_selected(item.id);
+                        }
+
+                        Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            border-radius: 14px;
+                            background: fmt-touch.has-hover ? #2563eb : #1e293b;
+                            border-width: 1px;
+                            border-color: fmt-touch.has-hover ? #60a5fa : #334155;
+                            animate background { duration: 120ms; }
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 6px;
+
+                                Text {
+                                    text: "📄";
+                                    font-size: 20px;
+                                    horizontal-alignment: center;
+                                }
+                                Text {
+                                    text: item.name;
+                                    font-size: 14px;
+                                    font-weight: 700;
+                                    color: #ffffff;
+                                    horizontal-alignment: center;
+                                }
+                                Text {
+                                    text: "." + item.extension;
+                                    font-size: 10px;
+                                    color: #94a3b8;
+                                    horizontal-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Back button in submenu
+            back-touch := TouchArea {
+                x: 100px;
+                y: 255px;
+                width: 140px;
+                height: 42px;
+                clicked => { root.back_clicked(); }
+
+                Rectangle {
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 21px;
+                    background: back-touch.has-hover ? #374151 : #1f2937;
+                    border-width: 1px;
+                    border-color: #4b5563;
+
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 6px;
+
+                        Text {
+                            text: "◀";
+                            font-size: 12px;
+                            color: #cbd5e1;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Geri Dön";
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: #e2e8f0;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // 3. TOAST OVERLAY (NOTIFICATION INSIDE RADIAL)
+        // ============================================
+        if root.has_toast: Rectangle {
+            width: 100%;
+            height: 100%;
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 12px;
+                padding-left: 28px;
+                padding-right: 28px;
+
+                Text {
+                    text: root.toast_is_error ? "⚠️" : "✅";
+                    font-size: 36px;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: root.toast_message;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: root.toast_is_error ? #f87171 : #4ade80;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+
+                if root.can_open_folder: open-touch := TouchArea {
+                    height: 38px;
+                    clicked => { root.open_folder_clicked(); }
+
+                    Rectangle {
+                        border-radius: 19px;
+                        background: open-touch.has-hover ? #2563eb : #1d4ed8;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 6px;
+
+                            Text {
+                                text: "📁";
+                                font-size: 13px;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: "Klasörü Aç";
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: #ffffff;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+
+                close-touch := TouchArea {
+                    height: 34px;
+                    clicked => { root.close_requested(); }
+
+                    Rectangle {
+                        border-radius: 17px;
+                        background: close-touch.has-hover ? #374151 : #1f2937;
+
+                        Text {
+                            text: "Kapat";
+                            font-size: 11px;
+                            color: #94a3b8;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // CENTER CORE DISC (when in main menu)
+        // ============================================
+        if !root.is_submenu && !root.has_toast: Rectangle {
+            width: 110px;
+            height: 110px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 55px;
+            background: #111827;
+            border-width: 2px;
+            border-color: #2563eb;
+            drop-shadow-blur: 10px;
+            drop-shadow-color: #00000088;
+
+            center-touch := TouchArea {
+                clicked => { root.close_requested(); }
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 2px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+
+                    Text {
+                        text: "Kısayolluk";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #60a5fa;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: root.file_name;
+                        font-size: 9px;
+                        color: #e2e8f0;
+                        horizontal-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: root.file_format + " • " + root.file_size;
+                        font-size: 8px;
+                        color: #94a3b8;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}
+
