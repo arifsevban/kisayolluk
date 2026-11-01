@@ -10,7 +10,7 @@ slint::slint! {
         title: "Kısayolluk Ayarları";
         width: 480px;
         height: 560px;
-        background: rgb(15, 23, 42);
+        background: rgb(20, 20, 23);
 
         in-out property <bool> start_with_windows: false;
         in-out property <bool> app_enabled: true;
@@ -40,22 +40,22 @@ slint::slint! {
                         text: "Kısayolluk Ayarları";
                         font-size: 18px;
                         font-weight: 700;
-                        color: white;
+                        color: rgb(244, 244, 245);
                     }
                     Text {
                         text: "Hızlı, hafif ve yerel radyal işlem aracı";
                         font-size: 11px;
-                        color: rgb(148, 163, 184);
+                        color: rgb(161, 161, 170);
                     }
                 }
             }
 
             // Section: Genel
             Rectangle {
-                background: rgb(30, 41, 59);
+                background: rgb(32, 32, 36);
                 border-radius: 8px;
                 border-width: 1px;
-                border-color: rgb(51, 65, 85);
+                border-color: rgb(63, 63, 70);
 
                 VerticalLayout {
                     padding: 12px;
@@ -65,7 +65,7 @@ slint::slint! {
                         text: "GENEL";
                         font-size: 11px;
                         font-weight: 700;
-                        color: rgb(56, 189, 248);
+                        color: rgb(212, 212, 216);
                     }
 
                     CheckBox {
@@ -87,10 +87,10 @@ slint::slint! {
 
             // Section: Kısayollar
             Rectangle {
-                background: rgb(30, 41, 59);
+                background: rgb(32, 32, 36);
                 border-radius: 8px;
                 border-width: 1px;
-                border-color: rgb(51, 65, 85);
+                border-color: rgb(63, 63, 70);
 
                 VerticalLayout {
                     padding: 12px;
@@ -100,7 +100,7 @@ slint::slint! {
                         text: "KISAYOLLAR & ALGILAMA";
                         font-size: 11px;
                         font-weight: 700;
-                        color: rgb(56, 189, 248);
+                        color: rgb(212, 212, 216);
                     }
 
                     HorizontalLayout {
@@ -108,7 +108,7 @@ slint::slint! {
                         Text {
                             text: "Global Kısayol:";
                             font-size: 12px;
-                            color: rgb(226, 232, 240);
+                            color: rgb(228, 228, 231);
                             vertical-alignment: center;
                         }
                         LineEdit {
@@ -127,7 +127,7 @@ slint::slint! {
                         Text {
                             text: "Çift Tık Aralığı (" + root.double_click_time_ms + " ms):";
                             font-size: 12px;
-                            color: rgb(226, 232, 240);
+                            color: rgb(228, 228, 231);
                             vertical-alignment: center;
                         }
                         Slider {
@@ -142,10 +142,10 @@ slint::slint! {
 
             // Section: Görsel Dönüştürme
             Rectangle {
-                background: rgb(30, 41, 59);
+                background: rgb(32, 32, 36);
                 border-radius: 8px;
                 border-width: 1px;
-                border-color: rgb(51, 65, 85);
+                border-color: rgb(63, 63, 70);
 
                 VerticalLayout {
                     padding: 12px;
@@ -155,7 +155,7 @@ slint::slint! {
                         text: "GÖRSEL DÖNÜŞTÜRME";
                         font-size: 11px;
                         font-weight: 700;
-                        color: rgb(56, 189, 248);
+                        color: rgb(212, 212, 216);
                     }
 
                     HorizontalLayout {
@@ -163,7 +163,7 @@ slint::slint! {
                         Text {
                             text: "JPEG Kalitesi (%" + root.jpeg_quality + "):";
                             font-size: 12px;
-                            color: rgb(226, 232, 240);
+                            color: rgb(228, 228, 231);
                             vertical-alignment: center;
                         }
                         Slider {

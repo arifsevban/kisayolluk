@@ -68,9 +68,9 @@ slint::slint! {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
             border-radius: 165px;
-            background: rgba(15, 23, 42, 0.94);
+            background: rgba(24, 24, 27, 0.95);
             border-width: 1.5px;
-            border-color: rgba(59, 130, 246, 0.4);
+            border-color: rgba(113, 113, 122, 0.4);
             drop-shadow-blur: 24px;
             drop-shadow-color: rgba(0, 0, 0, 0.8);
             clip: true;
@@ -96,7 +96,7 @@ slint::slint! {
                     Rectangle {
                         width: 100%;
                         height: 100%;
-                        background: top-touch.has-hover ? rgba(59, 130, 246, 0.25) : transparent;
+                        background: top-touch.has-hover ? rgba(255, 255, 255, 0.10) : transparent;
                         border-radius: 18px;
                         animate background { duration: 150ms; }
 
@@ -114,13 +114,13 @@ slint::slint! {
                                 text: "Dönüştür";
                                 font-size: 15px;
                                 font-weight: 700;
-                                color: top-touch.has-hover ? rgb(96, 165, 250) : white;
+                                color: top-touch.has-hover ? rgb(250, 250, 250) : rgb(228, 228, 231);
                                 horizontal-alignment: center;
                             }
                             Text {
                                 text: "Görsel formatını değiştir";
                                 font-size: 10px;
-                                color: rgb(148, 163, 184);
+                                color: rgb(161, 161, 170);
                                 horizontal-alignment: center;
                             }
                         }
@@ -241,20 +241,20 @@ slint::slint! {
                         text: "Hedef Format Seçin";
                         font-size: 13px;
                         font-weight: 700;
-                        color: rgb(147, 197, 253);
+                        color: rgb(244, 244, 245);
                         horizontal-alignment: center;
                     }
                     Text {
                         text: root.file_name;
                         font-size: 11px;
-                        color: rgb(203, 213, 225);
+                        color: rgb(212, 212, 216);
                         horizontal-alignment: center;
                         overflow: elide;
                     }
                     Text {
                         text: "Mevcut: " + root.file_format;
                         font-size: 10px;
-                        color: rgb(100, 116, 139);
+                        color: rgb(113, 113, 122);
                         horizontal-alignment: center;
                     }
                 }
@@ -280,9 +280,9 @@ slint::slint! {
                                 width: 100%;
                                 height: 100%;
                                 border-radius: 12px;
-                                background: fmt-touch.has-hover ? rgb(37, 99, 235) : rgb(30, 41, 59);
+                                background: fmt-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
                                 border-width: 1px;
-                                border-color: fmt-touch.has-hover ? rgb(96, 165, 250) : rgb(51, 65, 85);
+                                border-color: fmt-touch.has-hover ? rgb(161, 161, 170) : rgb(63, 63, 70);
                                 animate background { duration: 120ms; }
 
                                 VerticalLayout {
@@ -304,7 +304,7 @@ slint::slint! {
                                     Text {
                                         text: "." + item.extension;
                                         font-size: 9px;
-                                        color: rgb(148, 163, 184);
+                                        color: rgb(161, 161, 170);
                                         horizontal-alignment: center;
                                     }
                                 }
@@ -325,9 +325,9 @@ slint::slint! {
                         width: 100%;
                         height: 100%;
                         border-radius: 19px;
-                        background: back-touch.has-hover ? rgb(55, 65, 81) : rgb(31, 41, 55);
+                        background: back-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
                         border-width: 1px;
-                        border-color: rgb(75, 85, 99);
+                        border-color: rgb(63, 63, 70);
 
                         HorizontalLayout {
                             alignment: center;
@@ -336,14 +336,14 @@ slint::slint! {
                             Text {
                                 text: "◀";
                                 font-size: 11px;
-                                color: rgb(203, 213, 225);
+                                color: rgb(212, 212, 216);
                                 vertical-alignment: center;
                             }
                             Text {
                                 text: "Geri Dön";
                                 font-size: 12px;
                                 font-weight: 600;
-                                color: rgb(226, 232, 240);
+                                color: rgb(244, 244, 245);
                                 vertical-alignment: center;
                             }
                         }
@@ -384,7 +384,9 @@ slint::slint! {
 
                         Rectangle {
                             border-radius: 18px;
-                            background: open-touch.has-hover ? rgb(37, 99, 235) : rgb(29, 78, 216);
+                            background: open-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
+                            border-width: 1px;
+                            border-color: rgb(82, 82, 91);
 
                             HorizontalLayout {
                                 alignment: center;
@@ -412,12 +414,14 @@ slint::slint! {
 
                         Rectangle {
                             border-radius: 16px;
-                            background: close-touch.has-hover ? rgb(55, 65, 81) : rgb(31, 41, 55);
+                            background: close-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
+                            border-width: 1px;
+                            border-color: rgb(63, 63, 70);
 
                             Text {
                                 text: "Kapat";
                                 font-size: 11px;
-                                color: rgb(148, 163, 184);
+                                color: rgb(212, 212, 216);
                                 horizontal-alignment: center;
                                 vertical-alignment: center;
                             }
@@ -435,11 +439,11 @@ slint::slint! {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 border-radius: 53px;
-                background: rgb(17, 24, 39);
-                border-width: 2px;
-                border-color: rgb(37, 99, 235);
+                background: rgb(20, 20, 23);
+                border-width: 1.5px;
+                border-color: rgb(113, 113, 122);
                 drop-shadow-blur: 10px;
-                drop-shadow-color: rgba(0, 0, 0, 0.5);
+                drop-shadow-color: rgba(0, 0, 0, 0.6);
 
                 TouchArea {
                     clicked => { root.close_requested(); }
@@ -454,20 +458,20 @@ slint::slint! {
                             text: "Kısayolluk";
                             font-size: 10px;
                             font-weight: 700;
-                            color: rgb(96, 165, 250);
+                            color: rgb(244, 244, 245);
                             horizontal-alignment: center;
                         }
                         Text {
                             text: root.file_name;
                             font-size: 9px;
-                            color: rgb(226, 232, 240);
+                            color: rgb(212, 212, 216);
                             horizontal-alignment: center;
                             overflow: elide;
                         }
                         Text {
                             text: root.file_format + " • " + root.file_size;
                             font-size: 8px;
-                            color: rgb(148, 163, 184);
+                            color: rgb(161, 161, 170);
                             horizontal-alignment: center;
                         }
                     }
