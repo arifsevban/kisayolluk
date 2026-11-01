@@ -31,6 +31,7 @@ slint::slint! {
     }
 
     export component RadialMenuWindow inherits Window {
+        title: "Kısayolluk";
         width: 440px;
         height: 440px;
         no-frame: true;

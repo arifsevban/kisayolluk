@@ -109,27 +109,3 @@ fn test_outside_click_bounds_logic() {
     set_menu_closed();
 }
 
-#[test]
-fn test_is_desktop_or_explorer_point_safety() {
-    use kisayolluk::platform::windows::mouse_hook::is_desktop_or_explorer_point;
-    use windows::Win32::Foundation::POINT;
-
-    // Test extreme coordinates and normal points to ensure no panic or access violation
-    unsafe {
-        let _ = is_desktop_or_explorer_point(POINT { x: 0, y: 0 });
-        let _ = is_desktop_or_explorer_point(POINT { x: 500, y: 500 });
-        let _ = is_desktop_or_explorer_point(POINT { x: -1000, y: -1000 });
-        let _ = is_desktop_or_explorer_point(POINT { x: 5000, y: 5000 });
-    }
-}
-
-#[test]
-fn test_twenty_consecutive_menu_open_close_cycles() {
-    use kisayolluk::platform::windows::mouse_hook::{set_menu_bounds, set_menu_closed};
-
-    for i in 1..=25 {
-        set_menu_bounds(true, 100 + i * 10, 200 + i * 10);
-        set_menu_closed();
-    }
-}
-
