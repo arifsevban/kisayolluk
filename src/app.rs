@@ -51,8 +51,8 @@ impl KisayollukApp {
         thread::spawn(move || {
             while let Ok(event) = mouse_rx.recv() {
                 match event {
-                    crate::platform::windows::mouse_hook::MouseEvent::CtrlRightClick { x, y } => {
-                        let _ = es_mouse.send(AppEvent::CtrlRightClick { x, y });
+                    crate::platform::windows::mouse_hook::MouseEvent::MiddleClick { x, y } => {
+                        let _ = es_mouse.send(AppEvent::MiddleClick { x, y });
                     }
                     crate::platform::windows::mouse_hook::MouseEvent::OutsideClick => {
                         let _ = es_mouse.send(AppEvent::CloseMenu);
@@ -125,7 +125,7 @@ impl KisayollukApp {
 
     pub fn handle_event(&mut self, event: AppEvent) {
         match event {
-            AppEvent::CtrlRightClick { x, y } => {
+            AppEvent::MiddleClick { x, y } => {
                 self.last_click_pos = (x, y);
 
                 if !self.state.is_enabled() {

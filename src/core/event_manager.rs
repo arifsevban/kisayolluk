@@ -6,7 +6,7 @@ use crate::files::resolver::FileResolverResult;
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
-    CtrlRightClick { x: i32, y: i32 },
+    MiddleClick { x: i32, y: i32 },
     FileResolved {
         resolution: FileResolverResult,
         x: i32,

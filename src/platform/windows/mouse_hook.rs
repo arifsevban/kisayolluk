@@ -2,21 +2,22 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use windows::core::PCWSTR;
+use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseEvent {
-    CtrlRightClick { x: i32, y: i32 },
+    MiddleClick { x: i32, y: i32 },
     OutsideClick,
 }
 
 static HOOK_ENABLED: AtomicBool = AtomicBool::new(true);
-static WAS_CTRL_RCLICK_DOWN: AtomicBool = AtomicBool::new(false);
+static WAS_MBUTTON_DOWN: AtomicBool = AtomicBool::new(false);
+static MBUTTON_DOWN_POS_X: AtomicI32 = AtomicI32::new(0);
+static MBUTTON_DOWN_POS_Y: AtomicI32 = AtomicI32::new(0);
 static LAST_HOOK_DURATION_NS: AtomicU64 = AtomicU64::new(0);
 
 static MENU_OPEN: AtomicBool = AtomicBool::new(false);
@@ -123,8 +124,78 @@ pub fn start_mouse_hook(sender: Sender<MouseEvent>) -> std::result::Result<Mouse
 }
 
 #[inline]
-unsafe fn is_ctrl_down() -> bool {
-    (GetAsyncKeyState(VK_CONTROL.0 as i32) as u16 & 0x8000) != 0
+pub fn matches_wide_ignore_ascii_case(slice: &[u16], target: PCWSTR) -> bool {
+    unsafe {
+        let mut ptr = target.0;
+        let mut i = 0;
+        while *ptr != 0 {
+            if i >= slice.len() {
+                return false;
+            }
+            let c1 = slice[i];
+            let c2 = *ptr;
+            if c1 != c2 {
+                let lower1 = if c1 <= 0x7F { (c1 as u8).to_ascii_lowercase() as u16 } else { c1 };
+                let lower2 = if c2 <= 0x7F { (c2 as u8).to_ascii_lowercase() as u16 } else { c2 };
+                if lower1 != lower2 {
+                    return false;
+                }
+            }
+            ptr = ptr.add(1);
+            i += 1;
+        }
+        i == slice.len()
+    }
+}
+
+#[inline]
+pub unsafe fn is_desktop_or_explorer_point(pt: POINT) -> bool {
+    let hwnd = WindowFromPoint(pt);
+    if hwnd.0.is_null() {
+        return false;
+    }
+
+    let mut buf = [0u16; 64];
+    let len = GetClassNameW(hwnd, &mut buf);
+    if len > 0 {
+        let name = &buf[..len as usize];
+        // Exclude Windows Taskbar explicitly so taskbar middle-clicks are never intercepted
+        if matches_wide_ignore_ascii_case(name, w!("Shell_TrayWnd"))
+            || matches_wide_ignore_ascii_case(name, w!("Shell_SecondaryTrayWnd"))
+        {
+            return false;
+        }
+        // Immediate desktop window classes under cursor
+        if matches_wide_ignore_ascii_case(name, w!("SysListView32"))
+            || matches_wide_ignore_ascii_case(name, w!("SHELLDLL_DefView"))
+            || matches_wide_ignore_ascii_case(name, w!("Progman"))
+            || matches_wide_ignore_ascii_case(name, w!("WorkerW"))
+        {
+            return true;
+        }
+    }
+
+    let root = GetAncestor(hwnd, GA_ROOT);
+    let target = if root.0.is_null() { hwnd } else { root };
+
+    let len_root = GetClassNameW(target, &mut buf);
+    if len_root > 0 {
+        let root_name = &buf[..len_root as usize];
+        if matches_wide_ignore_ascii_case(root_name, w!("Shell_TrayWnd"))
+            || matches_wide_ignore_ascii_case(root_name, w!("Shell_SecondaryTrayWnd"))
+        {
+            return false;
+        }
+        if matches_wide_ignore_ascii_case(root_name, w!("CabinetWClass"))
+            || matches_wide_ignore_ascii_case(root_name, w!("ExploreWClass"))
+            || matches_wide_ignore_ascii_case(root_name, w!("Progman"))
+            || matches_wide_ignore_ascii_case(root_name, w!("WorkerW"))
+        {
+            return true;
+        }
+    }
+
+    false
 }
 
 unsafe extern "system" fn low_level_mouse_proc(
@@ -139,6 +210,7 @@ unsafe extern "system" fn low_level_mouse_proc(
             let msg = w_param.0 as u32;
 
             // 1. Outside Click Detection: close menu if user clicks outside the radial menu bounds
+            let mut is_outside_click = false;
             if MENU_OPEN.load(Ordering::Relaxed) {
                 if msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN {
                     let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
@@ -157,6 +229,7 @@ unsafe extern "system" fn low_level_mouse_proc(
 
                     // If click is outside the 225px radius circular menu:
                     if dist_sq > 225 * 225 {
+                        is_outside_click = true;
                         if MENU_OPEN.swap(false, Ordering::Relaxed) {
                             if let Some(ref sender) = EVENT_SENDER {
                                 let _ = sender.send(MouseEvent::OutsideClick);
@@ -166,49 +239,46 @@ unsafe extern "system" fn low_level_mouse_proc(
                 }
             }
 
-            // 2. Ctrl + Right Click Activation:
-            if msg == WM_RBUTTONDOWN {
-                if is_ctrl_down() {
-                    WAS_CTRL_RCLICK_DOWN.store(true, Ordering::Relaxed);
-                    // Swallow WM_RBUTTONDOWN so Windows doesn't initiate a context menu or selection focus
-                    return LRESULT(1);
-                } else {
-                    WAS_CTRL_RCLICK_DOWN.store(false, Ordering::Relaxed);
+            // 2. Middle Mouse Button (Mouse Wheel Click) Activation:
+            // Only active on Desktop or File Explorer surfaces when the menu is not already open
+            if !is_outside_click && !MENU_OPEN.load(Ordering::Relaxed) {
+                if msg == WM_MBUTTONDOWN {
+                    let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
+                    if is_desktop_or_explorer_point(ms_hook.pt) {
+                        WAS_MBUTTON_DOWN.store(true, Ordering::Relaxed);
+                        MBUTTON_DOWN_POS_X.store(ms_hook.pt.x, Ordering::Relaxed);
+                        MBUTTON_DOWN_POS_Y.store(ms_hook.pt.y, Ordering::Relaxed);
+                        // Swallow WM_MBUTTONDOWN so Windows Explorer/Desktop doesn't start auto-scroll or selection
+                        return LRESULT(1);
+                    }
                 }
-            } else if msg == WM_RBUTTONUP {
-                let was_down = WAS_CTRL_RCLICK_DOWN.swap(false, Ordering::Relaxed);
-                let ctrl_active = is_ctrl_down();
+            }
 
+            if msg == WM_MBUTTONUP {
+                let was_down = WAS_MBUTTON_DOWN.swap(false, Ordering::Relaxed);
                 if was_down {
-                    // Paired: WM_RBUTTONDOWN was swallowed, so WM_RBUTTONUP must also be swallowed.
-                    // Windows Explorer never saw DOWN, so it never has capture.
                     let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
-                    let x = ms_hook.pt.x;
-                    let y = ms_hook.pt.y;
+                    let start_x = MBUTTON_DOWN_POS_X.load(Ordering::Relaxed);
+                    let start_y = MBUTTON_DOWN_POS_Y.load(Ordering::Relaxed);
+                    let dx = ms_hook.pt.x - start_x;
+                    let dy = ms_hook.pt.y - start_y;
 
-                    if let Some(ref sender) = EVENT_SENDER {
-                        let _ = sender.send(MouseEvent::CtrlRightClick { x, y });
+                    // Small tolerance for mouse jitter during click (<= 25px)
+                    if dx * dx + dy * dy <= 25 * 25 {
+                        if let Some(ref sender) = EVENT_SENDER {
+                            let _ = sender.send(MouseEvent::MiddleClick {
+                                x: ms_hook.pt.x,
+                                y: ms_hook.pt.y,
+                            });
+                        }
                     }
 
+                    // Swallow WM_MBUTTONUP to cleanly pair with the swallowed WM_MBUTTONDOWN
                     return LRESULT(1);
-                } else if ctrl_active {
-                    // User pressed Right Click DOWN first, then Ctrl:
-                    // WM_RBUTTONDOWN was already sent to target window (e.g. Explorer).
-                    // We MUST pass WM_RBUTTONUP to the target window so it releases mouse capture cleanly!
-                    let ms_hook = *(l_param.0 as *const MSLLHOOKSTRUCT);
-                    let x = ms_hook.pt.x;
-                    let y = ms_hook.pt.y;
-
-                    if let Some(ref sender) = EVENT_SENDER {
-                        let _ = sender.send(MouseEvent::CtrlRightClick { x, y });
-                    }
-
-                    // CRITICAL: DO NOT return LRESULT(1) here!
-                    // Let CallNextHookEx deliver WM_RBUTTONUP so Explorer never gets stuck in a 15-20s capture lockup!
                 }
-            } else if msg == WM_LBUTTONDOWN || msg == WM_MBUTTONDOWN {
-                // Clear any pending state if user clicks left/middle button
-                WAS_CTRL_RCLICK_DOWN.store(false, Ordering::Relaxed);
+            } else if msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN {
+                // Clear any pending middle-click state if other buttons are pressed
+                WAS_MBUTTON_DOWN.store(false, Ordering::Relaxed);
             }
         }
 

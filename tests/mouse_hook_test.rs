@@ -25,13 +25,13 @@ fn test_mouse_manager_lifecycle_and_channel() {
 }
 
 #[test]
-fn test_ctrl_right_click_event_channel_capacity_and_repeatability() {
+fn test_middle_click_event_channel_capacity_and_repeatability() {
     let event_manager = EventManager::new();
     let sender = event_manager.get_sender();
 
-    // Verify sending 25 consecutive CtrlRightClick events without drops or blockage
+    // Verify sending 25 consecutive MiddleClick events without drops or blockage
     for i in 1..=25 {
-        sender.send(AppEvent::CtrlRightClick {
+        sender.send(AppEvent::MiddleClick {
             x: 100 + i,
             y: 200 + i,
         });
@@ -39,14 +39,40 @@ fn test_ctrl_right_click_event_channel_capacity_and_repeatability() {
 
     let mut count = 0;
     while let Ok(event) = event_manager.receiver().try_recv() {
-        if let AppEvent::CtrlRightClick { x, y } = event {
+        if let AppEvent::MiddleClick { x, y } = event {
             count += 1;
             assert_eq!(x, 100 + count);
             assert_eq!(y, 200 + count);
         }
     }
 
-    assert_eq!(count, 25, "All 25 consecutive CtrlRightClick events must be received accurately");
+    assert_eq!(count, 25, "All 25 consecutive MiddleClick events must be received accurately");
+}
+
+#[test]
+fn test_matches_wide_ignore_ascii_case() {
+    use kisayolluk::platform::windows::mouse_hook::matches_wide_ignore_ascii_case;
+    use windows::core::w;
+
+    let s1: Vec<u16> = "CabinetWClass".encode_utf16().collect();
+    assert!(matches_wide_ignore_ascii_case(&s1, w!("CabinetWClass")));
+    assert!(matches_wide_ignore_ascii_case(&s1, w!("cabinetwclass")));
+    assert!(matches_wide_ignore_ascii_case(&s1, w!("CABINETWCLASS")));
+
+    let s2: Vec<u16> = "Progman".encode_utf16().collect();
+    assert!(matches_wide_ignore_ascii_case(&s2, w!("progman")));
+    assert!(!matches_wide_ignore_ascii_case(&s2, w!("CabinetWClass")));
+
+    let s3: Vec<u16> = "Shell_TrayWnd".encode_utf16().collect();
+    assert!(matches_wide_ignore_ascii_case(&s3, w!("SHELL_TRAYWND")));
+    assert!(!matches_wide_ignore_ascii_case(&s3, w!("WorkerW")));
+
+    // Substrings / differing lengths
+    let s4: Vec<u16> = "CabinetW".encode_utf16().collect();
+    assert!(!matches_wide_ignore_ascii_case(&s4, w!("CabinetWClass")));
+
+    let s5: Vec<u16> = "CabinetWClassExtra".encode_utf16().collect();
+    assert!(!matches_wide_ignore_ascii_case(&s5, w!("CabinetWClass")));
 }
 
 #[test]
@@ -81,5 +107,29 @@ fn test_outside_click_bounds_logic() {
     // Test bounds setting and closing
     set_menu_bounds(true, 500, 300);
     set_menu_closed();
+}
+
+#[test]
+fn test_is_desktop_or_explorer_point_safety() {
+    use kisayolluk::platform::windows::mouse_hook::is_desktop_or_explorer_point;
+    use windows::Win32::Foundation::POINT;
+
+    // Test extreme coordinates and normal points to ensure no panic or access violation
+    unsafe {
+        let _ = is_desktop_or_explorer_point(POINT { x: 0, y: 0 });
+        let _ = is_desktop_or_explorer_point(POINT { x: 500, y: 500 });
+        let _ = is_desktop_or_explorer_point(POINT { x: -1000, y: -1000 });
+        let _ = is_desktop_or_explorer_point(POINT { x: 5000, y: 5000 });
+    }
+}
+
+#[test]
+fn test_twenty_consecutive_menu_open_close_cycles() {
+    use kisayolluk::platform::windows::mouse_hook::{set_menu_bounds, set_menu_closed};
+
+    for i in 1..=25 {
+        set_menu_bounds(true, 100 + i * 10, 200 + i * 10);
+        set_menu_closed();
+    }
 }
 
