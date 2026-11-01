@@ -62,7 +62,7 @@ slint::slint! {
             let dx = mx - 180.0;
             let dy = my - 180.0;
             let dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 52.0 || dist > 154.0) {
+            if (dist < 66.0 || dist > 164.0) {
                 return -1;
             }
             let a = Math.atan2(dy, dx) / 1deg; // -180 to 180 deg
@@ -86,7 +86,7 @@ slint::slint! {
         }
 
         // ============================================
-        // 1. ANNULAR SECTOR RADIAL MENU (DONUT WEDGES)
+        // 1. BLENDER PIE MENU (ANNULAR RING WEDGES)
         // ============================================
         if !root.is_submenu && !root.has_toast: menu-box := Rectangle {
             width: 100%;
@@ -94,7 +94,7 @@ slint::slint! {
 
             property <int> hovered_sector: touch.has-hover ? root.get_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.petals.length) : -1;
 
-            // 1a. Curved Annular Sector Wedges
+            // 1a. Curved Annular Sector Wedges (Blender Pie Menu Slices)
             for petal[index] in root.petals: Path {
                 width: 360px;
                 height: 360px;
@@ -102,15 +102,15 @@ slint::slint! {
                 y: 0px;
                 commands: petal.path_data;
                 fill: (menu-box.hovered_sector == index && petal.enabled)
-                    ? rgb(220, 121, 40)
-                    : (petal.enabled ? rgb(40, 43, 50) : rgb(24, 25, 29));
+                    ? rgb(228, 126, 32)
+                    : (petal.enabled ? rgba(42, 45, 53, 0.92) : rgba(26, 28, 33, 0.82));
                 stroke: (menu-box.hovered_sector == index && petal.enabled)
-                    ? rgb(245, 158, 66)
-                    : (petal.enabled ? rgba(110, 115, 128, 0.45) : rgba(55, 58, 66, 0.35));
-                stroke-width: (menu-box.hovered_sector == index && petal.enabled) ? 1.8px : 1.2px;
+                    ? rgb(250, 164, 70)
+                    : (petal.enabled ? rgba(255, 255, 255, 0.10) : rgba(255, 255, 255, 0.04));
+                stroke-width: (menu-box.hovered_sector == index && petal.enabled) ? 1.6px : 1.0px;
             }
 
-            // 1b. Petal Labels & Icons
+            // 1b. Slice Content: Centered Icon, Label, and Outward Arrow
             for petal[index] in root.petals: Rectangle {
                 x: petal.pos_x * 1px;
                 y: petal.pos_y * 1px;
@@ -121,14 +121,13 @@ slint::slint! {
                 VerticalLayout {
                     alignment: center;
                     spacing: 2px;
-                    padding: 4px;
 
                     if petal.arrow != "": Text {
                         text: petal.arrow;
                         font-size: 8px;
                         color: (menu-box.hovered_sector == index && petal.enabled)
                             ? white
-                            : (petal.enabled ? rgba(255, 255, 255, 0.75) : rgb(95, 100, 110));
+                            : (petal.enabled ? rgba(255, 255, 255, 0.8) : rgb(95, 100, 110));
                         horizontal-alignment: center;
                     }
                     Text {
@@ -158,50 +157,42 @@ slint::slint! {
                 }
             }
 
-            // 1c. Central Disc ("Kısayolluk" center hub - cursor origin)
+            // 1c. Center Floating Capsule in Wide Hollow Center (Blender Pie Menu Center Pill)
             Rectangle {
-                width: 96px;
-                height: 96px;
+                width: 104px;
+                height: 24px;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                border-radius: 48px;
-                background: rgb(20, 22, 26);
-                border-width: 1.5px;
-                border-color: rgb(75, 80, 92);
-                drop-shadow-blur: 14px;
-                drop-shadow-color: rgba(0, 0, 0, 0.8);
-                clip: true;
+                border-radius: 12px;
+                background: rgba(22, 24, 30, 0.85);
+                border-width: 1px;
+                border-color: rgba(255, 255, 255, 0.12);
+                drop-shadow-blur: 8px;
+                drop-shadow-color: rgba(0, 0, 0, 0.6);
 
-                VerticalLayout {
+                HorizontalLayout {
                     alignment: center;
-                    spacing: 2px;
-                    padding-left: 6px;
-                    padding-right: 6px;
+                    spacing: 5px;
+                    padding-left: 8px;
+                    padding-right: 8px;
 
                     Text {
-                        text: "Kısayolluk";
+                        text: "📄";
                         font-size: 10px;
-                        font-weight: 700;
-                        color: rgb(244, 244, 245);
-                        horizontal-alignment: center;
+                        vertical-alignment: center;
                     }
                     Text {
                         text: root.file_name;
-                        font-size: 9px;
-                        color: rgb(212, 212, 216);
-                        horizontal-alignment: center;
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: rgb(228, 231, 236);
+                        vertical-alignment: center;
                         overflow: elide;
-                    }
-                    Text {
-                        text: root.file_format + " • " + root.file_size;
-                        font-size: 8px;
-                        color: rgb(161, 161, 170);
-                        horizontal-alignment: center;
                     }
                 }
             }
 
-            // 1d. Master Interactive Area
+            // 1d. Master Interactive Touch Area
             touch := TouchArea {
                 width: 100%;
                 height: 100%;
@@ -211,7 +202,7 @@ slint::slint! {
                     let dx = (touch.mouse-x - 180px) / 1px;
                     let dy = (touch.mouse-y - 180px) / 1px;
                     let dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist > 154.0 || dist < 48.0) {
+                    if (dist > 164.0 || dist < 66.0) {
                         root.close_requested();
                     } else {
                         let s = root.get_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.petals.length);
@@ -539,12 +530,13 @@ pub fn create_daisy_petals(definitions: &[PetalDefinition], center_x: f32, cente
     let n = count as f32;
 
     let step = 2.0 * std::f32::consts::PI / n;
-    // Angular gap between sectors (approx 3.5 degrees)
-    let gap = (3.5_f32).to_radians();
+    // Clean, thin radial gap between sectors (2.5 degrees)
+    let gap = (2.5_f32).to_radians();
 
-    let r_in = 54.0_f32;
-    let r_out = 152.0_f32;
-    let r_mid = (r_in + r_out) / 2.0; // 103.0
+    // Wide hollow center: r_in = 68.0 (diameter 136px), r_out = 160.0 (diameter 320px)
+    let r_in = 68.0_f32;
+    let r_out = 160.0_f32;
+    let r_mid = (r_in + r_out) / 2.0; // 114.0
     let content_size = 72.0_f32;
 
     definitions
@@ -557,7 +549,7 @@ pub fn create_daisy_petals(definitions: &[PetalDefinition], center_x: f32, cente
             let end_angle = mid_angle + (step - gap) / 2.0;
 
             let path_data = generate_annular_wedge_path(
-                center_x, center_y, r_in, r_out, start_angle, end_angle, 6.0,
+                center_x, center_y, r_in, r_out, start_angle, end_angle, 5.0,
             );
 
             let cx = center_x + r_mid * mid_angle.cos();
