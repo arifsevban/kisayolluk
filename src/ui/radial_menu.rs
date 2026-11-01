@@ -10,6 +10,11 @@ slint::slint! {
         id: string,
         name: string,
         extension: string,
+        pos_x: float,
+        pos_y: float,
+        size_w: float,
+        size_h: float,
+        path_data: string,
     }
 
     export struct PetalItem {
@@ -26,8 +31,8 @@ slint::slint! {
     }
 
     export component RadialMenuWindow inherits Window {
-        width: 360px;
-        height: 360px;
+        width: 440px;
+        height: 440px;
         no-frame: true;
         background: transparent;
         always-on-top: true;
@@ -37,12 +42,7 @@ slint::slint! {
         in property <string> file_size: "1.2 MB";
         in property <bool> is_submenu: false;
         in property <[PetalItem]> petals: [];
-        in property <[TargetFormatItem]> target_formats: [
-            { id: "jpg", name: "JPG", extension: "jpg" },
-            { id: "webp", name: "WEBP", extension: "webp" },
-            { id: "bmp", name: "BMP", extension: "bmp" },
-            { id: "tiff", name: "TIFF", extension: "tiff" },
-        ];
+        in property <[TargetFormatItem]> target_formats: [];
         in property <string> toast_message: "";
         in property <bool> has_toast: false;
         in property <bool> toast_is_error: false;
@@ -59,8 +59,8 @@ slint::slint! {
             if (count <= 0) {
                 return -1;
             }
-            let dx = mx - 180.0;
-            let dy = my - 180.0;
+            let dx = mx - 220.0;
+            let dy = my - 220.0;
             let dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < 52.0 || dist > 138.0) {
                 return -1;
@@ -71,6 +71,27 @@ slint::slint! {
             let shifted = a + 90.0 + (sector_span / 2.0);
             let positive_angle = shifted < 0.0 ? shifted + 360.0 : (shifted >= 360.0 ? shifted - 360.0 : shifted);
             return Math.floor(positive_angle / sector_span);
+        }
+
+        pure function get_sat_sector(mx: float, my: float, count: int) -> int {
+            if (count <= 0) {
+                return -1;
+            }
+            let dx = mx - 220.0;
+            let dy = my - 220.0;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 139.0 || dist > 212.0) {
+                return -1;
+            }
+            let a = Math.atan2(dy, dx) / 1deg;
+            // Satellite arc spans from -145 to -35 deg
+            if (a < -146.0 || a > -34.0) {
+                return -1;
+            }
+            let step = 110.0 / count;
+            let offset = a - (-145.0);
+            let idx = Math.floor(offset / step);
+            return idx < 0 ? 0 : (idx >= count ? count - 1 : idx);
         }
 
         forward-focus: key-handler;
@@ -86,32 +107,37 @@ slint::slint! {
         }
 
         // ============================================
-        // 1. BLENDER PIE MENU (ANNULAR RING WEDGES)
+        // 1. BLENDER PIE MENU (ANNULAR RING + OUTER SATELLITE TIER)
         // ============================================
-        if !root.is_submenu && !root.has_toast: menu-box := Rectangle {
+        if !root.has_toast: menu-box := Rectangle {
             width: 100%;
             height: 100%;
 
             property <int> hovered_sector: touch.has-hover ? root.get_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.petals.length) : -1;
+            property <int> hovered_sat: (root.is_submenu && touch.has-hover) ? root.get_sat_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.target_formats.length) : -1;
 
-            // 1a. Curved Annular Sector Wedges (Blender Pie Menu Slices)
+            // 1a. Curved Annular Sector Wedges (Primary Ring)
             for petal[index] in root.petals: Path {
-                width: 360px;
-                height: 360px;
+                width: 440px;
+                height: 440px;
                 x: 0px;
                 y: 0px;
                 viewbox-x: 0;
                 viewbox-y: 0;
-                viewbox-width: 360;
-                viewbox-height: 360;
+                viewbox-width: 440;
+                viewbox-height: 440;
                 commands: petal.path_data;
-                fill: (menu-box.hovered_sector == index && petal.enabled)
+                fill: (root.is_submenu && index == 0)
                     ? rgb(228, 126, 32)
-                    : (petal.enabled ? rgba(42, 45, 53, 0.92) : rgba(26, 28, 33, 0.82));
-                stroke: (menu-box.hovered_sector == index && petal.enabled)
+                    : ((menu-box.hovered_sector == index && petal.enabled)
+                        ? rgb(228, 126, 32)
+                        : (petal.enabled ? rgba(42, 45, 53, 0.92) : rgba(26, 28, 33, 0.82)));
+                stroke: (root.is_submenu && index == 0)
                     ? rgb(250, 164, 70)
-                    : (petal.enabled ? rgba(255, 255, 255, 0.10) : rgba(255, 255, 255, 0.04));
-                stroke-width: (menu-box.hovered_sector == index && petal.enabled) ? 1.6px : 1.0px;
+                    : ((menu-box.hovered_sector == index && petal.enabled)
+                        ? rgb(250, 164, 70)
+                        : (petal.enabled ? rgba(255, 255, 255, 0.12) : rgba(255, 255, 255, 0.04)));
+                stroke-width: ((menu-box.hovered_sector == index && petal.enabled) || (root.is_submenu && index == 0)) ? 1.6px : 1.0px;
             }
 
             // 1b. Slice Content: Centered Icon, Label, and Outward Arrow
@@ -129,7 +155,7 @@ slint::slint! {
                     if petal.arrow != "": Text {
                         text: petal.arrow;
                         font-size: 8px;
-                        color: (menu-box.hovered_sector == index && petal.enabled)
+                        color: ((menu-box.hovered_sector == index && petal.enabled) || (root.is_submenu && index == 0))
                             ? white
                             : (petal.enabled ? rgba(255, 255, 255, 0.8) : rgb(95, 100, 110));
                         horizontal-alignment: center;
@@ -143,7 +169,7 @@ slint::slint! {
                         text: petal.title;
                         font-size: 11px;
                         font-weight: 700;
-                        color: (menu-box.hovered_sector == index && petal.enabled)
+                        color: ((menu-box.hovered_sector == index && petal.enabled) || (root.is_submenu && index == 0))
                             ? white
                             : (petal.enabled ? rgb(240, 240, 242) : rgb(113, 113, 122));
                         horizontal-alignment: center;
@@ -152,7 +178,7 @@ slint::slint! {
                     if petal.subtitle != "": Text {
                         text: petal.subtitle;
                         font-size: 8px;
-                        color: (menu-box.hovered_sector == index && petal.enabled)
+                        color: ((menu-box.hovered_sector == index && petal.enabled) || (root.is_submenu && index == 0))
                             ? rgb(254, 243, 199)
                             : (petal.enabled ? rgb(161, 161, 170) : rgb(82, 82, 91));
                         horizontal-alignment: center;
@@ -161,7 +187,7 @@ slint::slint! {
                 }
             }
 
-            // 1c. Center Floating Capsule in Hollow Opening (Cursor is at center 180, 180)
+            // 1c. Center Floating Capsule in Hollow Opening (Cursor is at center 220, 220)
             Rectangle {
                 width: 90px;
                 height: 22px;
@@ -196,40 +222,108 @@ slint::slint! {
                 }
             }
 
-            // 1d. Master Interactive Touch Area
+            // ============================================
+            // 1d. SATELLITE TIER (OUTER ARC SLICES ABOVE CONVERT)
+            // ============================================
+            if root.is_submenu: Rectangle {
+                width: 100%;
+                height: 100%;
+
+                // Satellite Arc Annular Wedges
+                for fmt[index] in root.target_formats: Path {
+                    width: 440px;
+                    height: 440px;
+                    x: 0px;
+                    y: 0px;
+                    viewbox-x: 0;
+                    viewbox-y: 0;
+                    viewbox-width: 440;
+                    viewbox-height: 440;
+                    commands: fmt.path_data;
+                    fill: (menu-box.hovered_sat == index)
+                        ? rgb(228, 126, 32)
+                        : rgba(42, 45, 53, 0.95);
+                    stroke: (menu-box.hovered_sat == index)
+                        ? rgb(250, 164, 70)
+                        : rgba(255, 255, 255, 0.14);
+                    stroke-width: (menu-box.hovered_sat == index) ? 1.6px : 1.0px;
+                }
+
+                // Satellite Arc Labels
+                for fmt[index] in root.target_formats: Rectangle {
+                    x: fmt.pos_x * 1px;
+                    y: fmt.pos_y * 1px;
+                    width: fmt.size_w * 1px;
+                    height: fmt.size_h * 1px;
+                    background: transparent;
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 1px;
+
+                        Text {
+                            text: "📄";
+                            font-size: 13px;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: fmt.name;
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: (menu-box.hovered_sat == index) ? white : rgb(240, 240, 244);
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // 1e. Master Interactive Touch Area
             touch := TouchArea {
                 width: 100%;
                 height: 100%;
-                mouse-cursor: (menu-box.hovered_sector >= 0 && menu-box.hovered_sector < root.petals.length && root.petals[menu-box.hovered_sector].enabled) ? pointer : default;
+                mouse-cursor: (((menu-box.hovered_sector >= 0 && menu-box.hovered_sector < root.petals.length && root.petals[menu-box.hovered_sector].enabled)) || (menu-box.hovered_sat >= 0)) ? pointer : default;
 
                 clicked => {
-                    let dx = (touch.mouse-x - 180px) / 1px;
-                    let dy = (touch.mouse-y - 180px) / 1px;
+                    let dx = (touch.mouse-x - 220px) / 1px;
+                    let dy = (touch.mouse-y - 220px) / 1px;
                     let dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist > 138.0 || dist < 52.0) {
-                        root.close_requested();
-                    } else {
+
+                    // If satellite tier is active and clicked on a satellite slice:
+                    if (root.is_submenu && dist >= 139.0 && dist <= 212.0) {
+                        let sat = root.get_sat_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.target_formats.length);
+                        if (sat >= 0 && sat < root.target_formats.length) {
+                            root.format_selected(root.target_formats[sat].id);
+                            return;
+                        }
+                    }
+
+                    // If clicked on primary ring:
+                    if (dist >= 52.0 && dist <= 138.0) {
                         let s = root.get_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.petals.length);
                         if (s >= 0 && s < root.petals.length) {
                             if (root.petals[s].enabled) {
                                 root.petal_clicked(root.petals[s].id);
+                                return;
                             }
                         }
                     }
+
+                    // Otherwise, clicked outside or in empty center -> close
+                    root.close_requested();
                 }
             }
         }
 
         // ============================================
-        // 2. CONVERSION SUBMENU / TOAST OVERLAY MODAL
+        // 2. TOAST OVERLAY MODAL
         // ============================================
-        if root.is_submenu || root.has_toast: Rectangle {
-            width: 330px;
-            height: 330px;
+        if root.has_toast: Rectangle {
+            width: 300px;
+            height: 300px;
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            border-radius: 165px;
-            background: rgba(24, 24, 27, 0.96);
+            border-radius: 150px;
+            background: rgba(22, 24, 28, 0.96);
             border-width: 1.5px;
             border-color: rgba(113, 113, 122, 0.4);
             drop-shadow-blur: 24px;
@@ -239,204 +333,72 @@ slint::slint! {
             // Stop click propagation
             TouchArea { }
 
-            // Submenu
-            if root.is_submenu && !root.has_toast: Rectangle {
-                width: 100%;
-                height: 100%;
+            VerticalLayout {
+                alignment: center;
+                spacing: 10px;
+                padding-left: 28px;
+                padding-right: 28px;
 
-                VerticalLayout {
-                    x: 25px;
-                    y: 18px;
-                    width: 280px;
-                    spacing: 2px;
-                    alignment: start;
-
-                    Text {
-                        text: "Hedef Format Seçin";
-                        font-size: 13px;
-                        font-weight: 700;
-                        color: rgb(244, 244, 245);
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        text: root.file_name;
-                        font-size: 11px;
-                        color: rgb(212, 212, 216);
-                        horizontal-alignment: center;
-                        overflow: elide;
-                    }
-                    Text {
-                        text: "Mevcut: " + root.file_format;
-                        font-size: 10px;
-                        color: rgb(113, 113, 122);
-                        horizontal-alignment: center;
-                    }
+                Text {
+                    text: root.toast_is_error ? "⚠️" : "✅";
+                    font-size: 32px;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: root.toast_message;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: root.toast_is_error ? rgb(248, 113, 113) : rgb(74, 222, 128);
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
                 }
 
-                HorizontalLayout {
-                    x: 20px;
-                    y: 90px;
-                    width: 290px;
-                    height: 135px;
-                    spacing: 6px;
-                    alignment: center;
-
-                    for item in root.target_formats: Rectangle {
-                        width: 64px;
-                        height: 115px;
-
-                        fmt-touch := TouchArea {
-                            clicked => {
-                                root.format_selected(item.id);
-                            }
-
-                            Rectangle {
-                                width: 100%;
-                                height: 100%;
-                                border-radius: 12px;
-                                background: fmt-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
-                                border-width: 1px;
-                                border-color: fmt-touch.has-hover ? rgb(161, 161, 170) : rgb(63, 63, 70);
-                                animate background { duration: 120ms; }
-
-                                VerticalLayout {
-                                    alignment: center;
-                                    spacing: 4px;
-
-                                    Text {
-                                        text: "📄";
-                                        font-size: 18px;
-                                        horizontal-alignment: center;
-                                    }
-                                    Text {
-                                        text: item.name;
-                                        font-size: 13px;
-                                        font-weight: 700;
-                                        color: white;
-                                        horizontal-alignment: center;
-                                    }
-                                    Text {
-                                        text: "." + item.extension;
-                                        font-size: 9px;
-                                        color: rgb(161, 161, 170);
-                                        horizontal-alignment: center;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Back Button
-                back-touch := TouchArea {
-                    x: 95px;
-                    y: 245px;
-                    width: 140px;
-                    height: 38px;
-                    clicked => { root.back_clicked(); }
+                if root.can_open_folder: open-touch := TouchArea {
+                    height: 36px;
+                    clicked => { root.open_folder_clicked(); }
 
                     Rectangle {
-                        width: 100%;
-                        height: 100%;
-                        border-radius: 19px;
-                        background: back-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
+                        border-radius: 18px;
+                        background: open-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
                         border-width: 1px;
-                        border-color: rgb(63, 63, 70);
+                        border-color: rgb(82, 82, 91);
 
                         HorizontalLayout {
                             alignment: center;
                             spacing: 6px;
 
                             Text {
-                                text: "◀";
-                                font-size: 11px;
-                                color: rgb(212, 212, 216);
+                                text: "📁";
+                                font-size: 12px;
                                 vertical-alignment: center;
                             }
                             Text {
-                                text: "Geri Dön";
+                                text: "Klasörü Aç";
                                 font-size: 12px;
                                 font-weight: 600;
-                                color: rgb(244, 244, 245);
+                                color: white;
                                 vertical-alignment: center;
                             }
                         }
                     }
                 }
-            }
 
-            // Toast overlay
-            if root.has_toast: Rectangle {
-                width: 100%;
-                height: 100%;
+                close-touch := TouchArea {
+                    height: 32px;
+                    clicked => { root.close_requested(); }
 
-                VerticalLayout {
-                    alignment: center;
-                    spacing: 10px;
-                    padding-left: 28px;
-                    padding-right: 28px;
+                    Rectangle {
+                        border-radius: 16px;
+                        background: close-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
+                        border-width: 1px;
+                        border-color: rgb(63, 63, 70);
 
-                    Text {
-                        text: root.toast_is_error ? "⚠️" : "✅";
-                        font-size: 32px;
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        text: root.toast_message;
-                        font-size: 12px;
-                        font-weight: 600;
-                        color: root.toast_is_error ? rgb(248, 113, 113) : rgb(74, 222, 128);
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
-                    }
-
-                    if root.can_open_folder: open-touch := TouchArea {
-                        height: 36px;
-                        clicked => { root.open_folder_clicked(); }
-
-                        Rectangle {
-                            border-radius: 18px;
-                            background: open-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
-                            border-width: 1px;
-                            border-color: rgb(82, 82, 91);
-
-                            HorizontalLayout {
-                                alignment: center;
-                                spacing: 6px;
-
-                                Text {
-                                    text: "📁";
-                                    font-size: 12px;
-                                    vertical-alignment: center;
-                                }
-                                Text {
-                                    text: "Klasörü Aç";
-                                    font-size: 12px;
-                                    font-weight: 600;
-                                    color: white;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-
-                    close-touch := TouchArea {
-                        height: 32px;
-                        clicked => { root.close_requested(); }
-
-                        Rectangle {
-                            border-radius: 16px;
-                            background: close-touch.has-hover ? rgb(63, 63, 70) : rgb(39, 39, 42);
-                            border-width: 1px;
-                            border-color: rgb(63, 63, 70);
-
-                            Text {
-                                text: "Kapat";
-                                font-size: 11px;
-                                color: rgb(212, 212, 216);
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
+                        Text {
+                            text: "Kapat";
+                            font-size: 11px;
+                            color: rgb(212, 212, 216);
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
                         }
                     }
                 }
@@ -585,6 +547,61 @@ pub fn create_daisy_petals(definitions: &[PetalDefinition], center_x: f32, cente
         .collect()
 }
 
+/// Dynamically calculates satellite arc pie slices for any number of sub-items
+pub fn create_satellite_petals(
+    formats: &[SupportedImageFormat],
+    cx: f32,
+    cy: f32,
+    parent_mid_angle: f32,
+) -> Vec<TargetFormatItem> {
+    let count = formats.len().max(1);
+    let k = count as f32;
+
+    // Arc span for the satellite tier: 110 degrees centered at parent_mid_angle
+    let total_span = (110.0_f32).to_radians();
+    let step = total_span / k;
+    let gap = (3.5_f32).to_radians();
+
+    let r_in = 140.0_f32;
+    let r_out = 205.0_f32;
+    let r_mid = (r_in + r_out) / 2.0; // 172.5
+    let box_w = 60.0_f32;
+    let box_h = 44.0_f32;
+    let corner_radius = 4.0_f32;
+
+    let start_base = parent_mid_angle - total_span / 2.0;
+
+    formats
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let mid_angle = start_base + (i as f32 + 0.5) * step;
+            let start_angle = mid_angle - (step - gap) / 2.0;
+            let end_angle = mid_angle + (step - gap) / 2.0;
+
+            let path_data = generate_annular_wedge_path(
+                cx, cy, r_in, r_out, start_angle, end_angle, corner_radius,
+            );
+
+            let label_cx = cx + r_mid * mid_angle.cos();
+            let label_cy = cy + r_mid * mid_angle.sin();
+            let px = (label_cx - box_w / 2.0).round();
+            let py = (label_cy - box_h / 2.0).round();
+
+            TargetFormatItem {
+                id: f.default_extension().into(),
+                name: f.display_name().into(),
+                extension: f.default_extension().into(),
+                pos_x: px,
+                pos_y: py,
+                size_w: box_w,
+                size_h: box_h,
+                path_data: path_data.into(),
+            }
+        })
+        .collect()
+}
+
 pub struct RadialMenuController {
     window: RadialMenuWindow,
 }
@@ -607,7 +624,8 @@ impl RadialMenuController {
         window.on_petal_clicked(move |petal_id| {
             if petal_id == "convert" {
                 if let Some(win) = win_weak_petal.upgrade() {
-                    win.set_is_submenu(true);
+                    let cur = win.get_is_submenu();
+                    win.set_is_submenu(!cur);
                 }
             }
         });
@@ -699,30 +717,22 @@ impl RadialMenuController {
             },
         ];
 
-        let petals = create_daisy_petals(&default_petals, 180.0, 180.0);
+        let petals = create_daisy_petals(&default_petals, 220.0, 220.0);
         let petal_model = Rc::new(VecModel::from(petals));
         self.window.set_petals(ModelRc::from(petal_model));
 
-        // 2. Target formats for the conversion submenu
+        // 2. Target formats for the conversion satellite arc (above "Dönüştür", which is at -PI/2)
         let targets = SupportedImageFormat::targets_for(file.format);
-        let items: Vec<TargetFormatItem> = targets
-            .into_iter()
-            .map(|f| TargetFormatItem {
-                id: f.default_extension().into(),
-                name: f.display_name().into(),
-                extension: f.default_extension().into(),
-            })
-            .collect();
-
-        let model = Rc::new(VecModel::from(items));
+        let sat_items = create_satellite_petals(&targets, 220.0, 220.0, -std::f32::consts::FRAC_PI_2);
+        let model = Rc::new(VecModel::from(sat_items));
         self.window.set_target_formats(ModelRc::from(model));
 
         self.window.set_is_submenu(false);
         self.window.set_has_toast(false);
 
-        // 3. Center on mouse cursor (cursor is at center 180, 180 of the radial disc)
-        let half_w = 180;
-        let half_h = 180;
+        // 3. Center on mouse cursor (cursor is at center 220, 220 of the 440x440 window)
+        let half_w = 220;
+        let half_h = 220;
         let pos_x = (x - half_w).max(0);
         let pos_y = (y - half_h).max(0);
         self.window.window().set_position(slint::PhysicalPosition::new(pos_x, pos_y));
@@ -738,8 +748,8 @@ impl RadialMenuController {
         self.window.set_can_open_folder(can_open_folder);
         self.window.set_has_toast(true);
 
-        let half_w = 180;
-        let half_h = 180;
+        let half_w = 220;
+        let half_h = 220;
         let pos_x = (x - half_w).max(0);
         let pos_y = (y - half_h).max(0);
         self.window.window().set_position(slint::PhysicalPosition::new(pos_x, pos_y));

@@ -127,3 +127,32 @@ fn test_annular_wedge_path_format() {
     assert_eq!(petals[1].arrow.as_str(), "▶");
 }
 
+#[test]
+fn test_satellite_arc_petals_generation() {
+    use kisayolluk::files::file_type::SupportedImageFormat;
+    use kisayolluk::ui::radial_menu::create_satellite_petals;
+
+    let formats = vec![
+        SupportedImageFormat::Jpeg,
+        SupportedImageFormat::Webp,
+        SupportedImageFormat::Bmp,
+        SupportedImageFormat::Tiff,
+    ];
+
+    let sats = create_satellite_petals(&formats, 220.0, 220.0, -std::f32::consts::FRAC_PI_2);
+    assert_eq!(sats.len(), 4);
+
+    for s in &sats {
+        assert!(s.pos_x >= 0.0 && s.pos_x + s.size_w <= 440.0);
+        assert!(s.pos_y >= 0.0 && s.pos_y + s.size_h <= 440.0);
+        assert!(s.path_data.starts_with('M'));
+        assert!(s.path_data.ends_with('Z'));
+        assert!(s.path_data.contains(" A "));
+    }
+
+    assert_eq!(sats[0].id.as_str(), "jpg");
+    assert_eq!(sats[1].id.as_str(), "webp");
+    assert_eq!(sats[2].id.as_str(), "bmp");
+    assert_eq!(sats[3].id.as_str(), "tiff");
+}
+

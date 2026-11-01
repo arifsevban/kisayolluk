@@ -148,15 +148,15 @@ unsafe extern "system" fn low_level_mouse_proc(
                     let menu_x = MENU_POS_X.load(Ordering::Relaxed);
                     let menu_y = MENU_POS_Y.load(Ordering::Relaxed);
 
-                    // Circular menu has radius 165px centered at (menu_x + 180, menu_y + 180)
-                    let center_x = menu_x + 180;
-                    let center_y = menu_y + 180;
+                    // Circular menu has radius up to 215px centered at (menu_x + 220, menu_y + 220)
+                    let center_x = menu_x + 220;
+                    let center_y = menu_y + 220;
                     let dx = click_x - center_x;
                     let dy = click_y - center_y;
                     let dist_sq = dx * dx + dy * dy;
 
-                    // If click is outside the 170px radius circular menu:
-                    if dist_sq > 170 * 170 {
+                    // If click is outside the 225px radius circular menu:
+                    if dist_sq > 225 * 225 {
                         if MENU_OPEN.swap(false, Ordering::Relaxed) {
                             if let Some(ref sender) = EVENT_SENDER {
                                 let _ = sender.send(MouseEvent::OutsideClick);
