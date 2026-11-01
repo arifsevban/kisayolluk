@@ -62,7 +62,7 @@ slint::slint! {
             let dx = mx - 180.0;
             let dy = my - 180.0;
             let dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 66.0 || dist > 164.0) {
+            if (dist < 52.0 || dist > 138.0) {
                 return -1;
             }
             let a = Math.atan2(dy, dx) / 1deg; // -180 to 180 deg
@@ -100,6 +100,10 @@ slint::slint! {
                 height: 360px;
                 x: 0px;
                 y: 0px;
+                viewbox-x: 0;
+                viewbox-y: 0;
+                viewbox-width: 360;
+                viewbox-height: 360;
                 commands: petal.path_data;
                 fill: (menu-box.hovered_sector == index && petal.enabled)
                     ? rgb(228, 126, 32)
@@ -157,33 +161,33 @@ slint::slint! {
                 }
             }
 
-            // 1c. Center Floating Capsule in Wide Hollow Center (Blender Pie Menu Center Pill)
+            // 1c. Center Floating Capsule in Hollow Opening (Cursor is at center 180, 180)
             Rectangle {
-                width: 104px;
-                height: 24px;
+                width: 90px;
+                height: 22px;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                border-radius: 12px;
-                background: rgba(22, 24, 30, 0.85);
+                border-radius: 11px;
+                background: rgba(22, 24, 30, 0.82);
                 border-width: 1px;
                 border-color: rgba(255, 255, 255, 0.12);
                 drop-shadow-blur: 8px;
-                drop-shadow-color: rgba(0, 0, 0, 0.6);
+                drop-shadow-color: rgba(0, 0, 0, 0.5);
 
                 HorizontalLayout {
                     alignment: center;
-                    spacing: 5px;
-                    padding-left: 8px;
-                    padding-right: 8px;
+                    spacing: 4px;
+                    padding-left: 6px;
+                    padding-right: 6px;
 
                     Text {
                         text: "📄";
-                        font-size: 10px;
+                        font-size: 9px;
                         vertical-alignment: center;
                     }
                     Text {
                         text: root.file_name;
-                        font-size: 10px;
+                        font-size: 9px;
                         font-weight: 600;
                         color: rgb(228, 231, 236);
                         vertical-alignment: center;
@@ -202,7 +206,7 @@ slint::slint! {
                     let dx = (touch.mouse-x - 180px) / 1px;
                     let dy = (touch.mouse-y - 180px) / 1px;
                     let dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist > 164.0 || dist < 66.0) {
+                    if (dist > 138.0 || dist < 52.0) {
                         root.close_requested();
                     } else {
                         let s = root.get_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.petals.length);
@@ -530,14 +534,14 @@ pub fn create_daisy_petals(definitions: &[PetalDefinition], center_x: f32, cente
     let n = count as f32;
 
     let step = 2.0 * std::f32::consts::PI / n;
-    // Clean, thin radial gap between sectors (2.5 degrees)
-    let gap = (2.5_f32).to_radians();
+    // Clean, distinct radial gap between sectors (4.0 degrees for clear separation)
+    let gap = (4.0_f32).to_radians();
 
-    // Wide hollow center: r_in = 68.0 (diameter 136px), r_out = 160.0 (diameter 320px)
-    let r_in = 68.0_f32;
-    let r_out = 160.0_f32;
-    let r_mid = (r_in + r_out) / 2.0; // 114.0
-    let content_size = 72.0_f32;
+    // Compact, balanced ring: r_in = 55.0 (diameter 110px), r_out = 135.0 (diameter 270px)
+    let r_in = 55.0_f32;
+    let r_out = 135.0_f32;
+    let r_mid = (r_in + r_out) / 2.0; // 95.0
+    let content_size = 64.0_f32;
 
     definitions
         .iter()
@@ -549,7 +553,7 @@ pub fn create_daisy_petals(definitions: &[PetalDefinition], center_x: f32, cente
             let end_angle = mid_angle + (step - gap) / 2.0;
 
             let path_data = generate_annular_wedge_path(
-                center_x, center_y, r_in, r_out, start_angle, end_angle, 5.0,
+                center_x, center_y, r_in, r_out, start_angle, end_angle, 4.0,
             );
 
             let cx = center_x + r_mid * mid_angle.cos();
@@ -716,11 +720,11 @@ impl RadialMenuController {
         self.window.set_is_submenu(false);
         self.window.set_has_toast(false);
 
-        // 3. Center on mouse cursor (cursor is at center 180, 180 of the daisy disc)
+        // 3. Center on mouse cursor (cursor is at center 180, 180 of the radial disc)
         let half_w = 180;
         let half_h = 180;
-        let pos_x = (x - half_w).max(20);
-        let pos_y = (y - half_h).max(20);
+        let pos_x = (x - half_w).max(0);
+        let pos_y = (y - half_h).max(0);
         self.window.window().set_position(slint::PhysicalPosition::new(pos_x, pos_y));
 
         crate::platform::windows::mouse_hook::set_menu_bounds(true, pos_x, pos_y);
@@ -736,8 +740,8 @@ impl RadialMenuController {
 
         let half_w = 180;
         let half_h = 180;
-        let pos_x = (x - half_w).max(20);
-        let pos_y = (y - half_h).max(20);
+        let pos_x = (x - half_w).max(0);
+        let pos_y = (y - half_h).max(0);
         self.window.window().set_position(slint::PhysicalPosition::new(pos_x, pos_y));
 
         crate::platform::windows::mouse_hook::set_menu_bounds(true, pos_x, pos_y);
