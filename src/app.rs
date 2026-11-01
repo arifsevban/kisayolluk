@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Instant;
@@ -25,7 +24,6 @@ pub struct KisayollukApp {
     _keyboard_mgr: KeyboardManager,
     tray: Option<SystemTray>,
     _event_sender: EventSender,
-    last_converted_path: Option<PathBuf>,
     last_click_pos: (i32, i32),
 }
 
@@ -121,7 +119,6 @@ impl KisayollukApp {
             _keyboard_mgr: keyboard_mgr,
             tray,
             _event_sender: es,
-            last_converted_path: None,
             last_click_pos: (400, 300),
         })
     }
@@ -214,31 +211,23 @@ impl KisayollukApp {
             }
 
             AppEvent::ConvertRequested { target_format } => {
+                // Instantly hide menu and restore mouse input
+                self.state.set_menu_open(false);
+                crate::platform::windows::mouse_hook::set_menu_closed();
+                self.radial_ui.hide();
+
                 if let Some(file) = self.state.get_active_file() {
                     let settings = self.state.get_settings();
                     let start_time = Instant::now();
                     match ConversionEngine::execute_conversion(&file.path, target_format, &settings) {
                         Ok(output_path) => {
                             let duration_ms = start_time.elapsed().as_millis();
-                            let file_name = output_path
-                                .file_name()
-                                .map(|f| f.to_string_lossy().to_string())
-                                .unwrap_or_else(|| "dosya".to_string());
-
                             println!(
                                 "Dönüştürme tamamlandı ({} ms): {}",
                                 duration_ms,
                                 output_path.display()
                             );
-
-                            self.last_converted_path = Some(output_path);
-                            self.radial_ui.show_toast(
-                                &format!("Dönüştürme başarılı: {}", file_name),
-                                false,
-                                true,
-                                self.last_click_pos.0,
-                                self.last_click_pos.1,
-                            );
+                            // Başarılı dönüştürme sonrası bildirim ve klasör açma yapılmaz, sessizce tamamlanır.
                         }
                         Err(err) => {
                             eprintln!("Dönüştürme başarısız: {}", err);
@@ -262,9 +251,6 @@ impl KisayollukApp {
                 self.state.set_menu_open(false);
                 crate::platform::windows::mouse_hook::set_menu_closed();
                 self.radial_ui.hide();
-                if let Some(ref path) = self.last_converted_path.take() {
-                    NotificationManager::open_in_explorer(path);
-                }
             }
 
             AppEvent::ToggleEnabled => {

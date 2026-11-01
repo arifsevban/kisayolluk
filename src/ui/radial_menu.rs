@@ -645,7 +645,12 @@ impl RadialMenuController {
         });
 
         let sender_clone = event_sender.clone();
+        let win_weak_fmt = window.as_weak();
         window.on_format_selected(move |fmt_str| {
+            crate::platform::windows::mouse_hook::set_menu_closed();
+            if let Some(win) = win_weak_fmt.upgrade() {
+                let _ = win.hide();
+            }
             if let Some(fmt) = match fmt_str.as_str() {
                 "png" => Some(SupportedImageFormat::Png),
                 "jpg" | "jpeg" => Some(SupportedImageFormat::Jpeg),
