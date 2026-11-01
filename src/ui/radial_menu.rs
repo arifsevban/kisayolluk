@@ -12,6 +12,17 @@ slint::slint! {
         extension: string,
     }
 
+    export struct PetalItem {
+        id: string,
+        title: string,
+        subtitle: string,
+        icon: string,
+        enabled: bool,
+        pos_x: float,
+        pos_y: float,
+        size: float,
+    }
+
     export component RadialMenuWindow inherits Window {
         width: 360px;
         height: 360px;
@@ -23,6 +34,7 @@ slint::slint! {
         in property <string> file_format: "PNG";
         in property <string> file_size: "1.2 MB";
         in property <bool> is_submenu: false;
+        in property <[PetalItem]> petals: [];
         in property <[TargetFormatItem]> target_formats: [
             { id: "jpg", name: "JPG", extension: "jpg" },
             { id: "webp", name: "WEBP", extension: "webp" },
@@ -34,6 +46,7 @@ slint::slint! {
         in property <bool> toast_is_error: false;
         in property <bool> can_open_folder: false;
 
+        callback petal_clicked(string);
         callback convert_clicked();
         callback format_selected(string);
         callback back_clicked();
@@ -61,171 +74,140 @@ slint::slint! {
             }
         }
 
-        // Circular Menu Container
-        Rectangle {
-            width: 330px;
-            height: 330px;
-            x: (parent.width - self.width) / 2;
-            y: (parent.height - self.height) / 2;
-            border-radius: 165px;
-            background: rgba(24, 24, 27, 0.95);
-            border-width: 1.5px;
-            border-color: rgba(113, 113, 122, 0.4);
-            drop-shadow-blur: 24px;
-            drop-shadow-color: rgba(0, 0, 0, 0.8);
-            clip: true;
+        // ============================================
+        // 1. DAISY FLOWER RADIAL MENU (PAPATYA ÇİÇEĞİ)
+        // ============================================
+        if !root.is_submenu && !root.has_toast: Rectangle {
+            width: 100%;
+            height: 100%;
 
-            // Stop click propagation
-            TouchArea { }
+            // 1a. Round Daisy Petals radiating around the cursor
+            for petal[index] in root.petals: Rectangle {
+                x: petal.pos_x * 1px;
+                y: petal.pos_y * 1px;
+                width: petal.size * 1px;
+                height: petal.size * 1px;
+                border-radius: (petal.size / 2) * 1px;
+                background: petal.enabled
+                    ? (petal-touch.has-hover ? rgb(48, 48, 54) : rgb(28, 28, 32))
+                    : rgba(24, 24, 27, 0.72);
+                border-width: petal.enabled ? (petal-touch.has-hover ? 1.5px : 1.0px) : 1.0px;
+                border-color: petal.enabled
+                    ? (petal-touch.has-hover ? rgb(228, 228, 231) : rgba(113, 113, 122, 0.45))
+                    : rgba(63, 63, 70, 0.35);
+                drop-shadow-blur: 16px;
+                drop-shadow-color: rgba(0, 0, 0, 0.75);
+                clip: true;
+                animate background { duration: 140ms; }
+                animate border-color { duration: 140ms; }
 
-            // ============================================
-            // 1. MAIN 4-QUADRANT RADIAL MENU
-            // ============================================
-            if !root.is_submenu && !root.has_toast: Rectangle {
-                width: 100%;
-                height: 100%;
-
-                // TOP SLICE: "Dönüştür" (ACTIVE)
-                top-touch := TouchArea {
-                    x: 20px;
-                    y: 10px;
-                    width: 290px;
-                    height: 115px;
-                    clicked => { root.convert_clicked(); }
-
-                    Rectangle {
-                        width: 100%;
-                        height: 100%;
-                        background: top-touch.has-hover ? rgba(255, 255, 255, 0.10) : transparent;
-                        border-radius: 18px;
-                        animate background { duration: 150ms; }
-
-                        VerticalLayout {
-                            alignment: center;
-                            spacing: 3px;
-                            padding-top: 12px;
-
-                            Text {
-                                text: "⚡";
-                                font-size: 24px;
-                                horizontal-alignment: center;
-                            }
-                            Text {
-                                text: "Dönüştür";
-                                font-size: 15px;
-                                font-weight: 700;
-                                color: top-touch.has-hover ? rgb(250, 250, 250) : rgb(228, 228, 231);
-                                horizontal-alignment: center;
-                            }
-                            Text {
-                                text: "Görsel formatını değiştir";
-                                font-size: 10px;
-                                color: rgb(161, 161, 170);
-                                horizontal-alignment: center;
-                            }
-                        }
+                petal-touch := TouchArea {
+                    width: 100%;
+                    height: 100%;
+                    enabled: petal.enabled;
+                    clicked => {
+                        root.petal_clicked(petal.id);
                     }
-                }
-
-                // RIGHT SLICE: "İşlem 2" (DISABLED)
-                Rectangle {
-                    x: 205px;
-                    y: 105px;
-                    width: 115px;
-                    height: 115px;
-                    opacity: 0.35;
 
                     VerticalLayout {
                         alignment: center;
-                        spacing: 3px;
+                        spacing: 2px;
+                        padding: 8px;
 
                         Text {
-                            text: "📦";
-                            font-size: 20px;
+                            text: petal.icon;
+                            font-size: petal.size > 90.0 ? 24px : 20px;
                             horizontal-alignment: center;
                         }
                         Text {
-                            text: "İşlem 2";
-                            font-size: 12px;
-                            font-weight: 600;
-                            color: rgb(203, 213, 225);
+                            text: petal.title;
+                            font-size: petal.size > 90.0 ? 13px : 11px;
+                            font-weight: 700;
+                            color: petal.enabled
+                                ? (petal-touch.has-hover ? rgb(250, 250, 250) : rgb(228, 228, 231))
+                                : rgb(113, 113, 122);
                             horizontal-alignment: center;
+                            overflow: elide;
                         }
-                        Text {
-                            text: "Yakında";
-                            font-size: 9px;
-                            color: rgb(100, 116, 139);
+                        if petal.subtitle != "": Text {
+                            text: petal.subtitle;
+                            font-size: petal.size > 90.0 ? 9px : 8px;
+                            color: petal.enabled ? rgb(161, 161, 170) : rgb(82, 82, 91);
                             horizontal-alignment: center;
-                        }
-                    }
-                }
-
-                // BOTTOM SLICE: "İşlem 3" (DISABLED)
-                Rectangle {
-                    x: 20px;
-                    y: 205px;
-                    width: 290px;
-                    height: 115px;
-                    opacity: 0.35;
-
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 3px;
-                        padding-bottom: 12px;
-
-                        Text {
-                            text: "İşlem 3";
-                            font-size: 12px;
-                            font-weight: 600;
-                            color: rgb(203, 213, 225);
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: "🔒 Yakında";
-                            font-size: 9px;
-                            color: rgb(100, 116, 139);
-                            horizontal-alignment: center;
-                        }
-                    }
-                }
-
-                // LEFT SLICE: "İşlem 4" (DISABLED)
-                Rectangle {
-                    x: 10px;
-                    y: 105px;
-                    width: 115px;
-                    height: 115px;
-                    opacity: 0.35;
-
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 3px;
-
-                        Text {
-                            text: "✂️";
-                            font-size: 20px;
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: "İşlem 4";
-                            font-size: 12px;
-                            font-weight: 600;
-                            color: rgb(203, 213, 225);
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: "Yakında";
-                            font-size: 9px;
-                            color: rgb(100, 116, 139);
-                            horizontal-alignment: center;
+                            overflow: elide;
                         }
                     }
                 }
             }
 
-            // ============================================
-            // 2. CONVERSION SUBMENU (DYNAMIC TARGET FORMATS)
-            // ============================================
+            // 1b. Central Floral Disc ("Papatya Göbeği" - Mouse cursor center)
+            Rectangle {
+                width: 96px;
+                height: 96px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                border-radius: 48px;
+                background: rgb(18, 18, 21);
+                border-width: 1.5px;
+                border-color: rgb(113, 113, 122);
+                drop-shadow-blur: 14px;
+                drop-shadow-color: rgba(0, 0, 0, 0.75);
+                clip: true;
+
+                TouchArea {
+                    clicked => { root.close_requested(); }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        padding-left: 6px;
+                        padding-right: 6px;
+
+                        Text {
+                            text: "Kısayolluk";
+                            font-size: 10px;
+                            font-weight: 700;
+                            color: rgb(244, 244, 245);
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: root.file_name;
+                            font-size: 9px;
+                            color: rgb(212, 212, 216);
+                            horizontal-alignment: center;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: root.file_format + " • " + root.file_size;
+                            font-size: 8px;
+                            color: rgb(161, 161, 170);
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // 2. CONVERSION SUBMENU / TOAST OVERLAY MODAL
+        // ============================================
+        if root.is_submenu || root.has_toast: Rectangle {
+            width: 330px;
+            height: 330px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 165px;
+            background: rgba(24, 24, 27, 0.96);
+            border-width: 1.5px;
+            border-color: rgba(113, 113, 122, 0.4);
+            drop-shadow-blur: 24px;
+            drop-shadow-color: rgba(0, 0, 0, 0.85);
+            clip: true;
+
+            // Stop click propagation
+            TouchArea { }
+
+            // Submenu
             if root.is_submenu && !root.has_toast: Rectangle {
                 width: 100%;
                 height: 100%;
@@ -351,9 +333,7 @@ slint::slint! {
                 }
             }
 
-            // ============================================
-            // 3. TOAST OVERLAY
-            // ============================================
+            // Toast overlay
             if root.has_toast: Rectangle {
                 width: 100%;
                 height: 100%;
@@ -429,56 +409,55 @@ slint::slint! {
                     }
                 }
             }
-
-            // ============================================
-            // CENTER DISC
-            // ============================================
-            if !root.is_submenu && !root.has_toast: Rectangle {
-                width: 105px;
-                height: 105px;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                border-radius: 53px;
-                background: rgb(20, 20, 23);
-                border-width: 1.5px;
-                border-color: rgb(113, 113, 122);
-                drop-shadow-blur: 10px;
-                drop-shadow-color: rgba(0, 0, 0, 0.6);
-
-                TouchArea {
-                    clicked => { root.close_requested(); }
-
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 2px;
-                        padding-left: 6px;
-                        padding-right: 6px;
-
-                        Text {
-                            text: "Kısayolluk";
-                            font-size: 10px;
-                            font-weight: 700;
-                            color: rgb(244, 244, 245);
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: root.file_name;
-                            font-size: 9px;
-                            color: rgb(212, 212, 216);
-                            horizontal-alignment: center;
-                            overflow: elide;
-                        }
-                        Text {
-                            text: root.file_format + " • " + root.file_size;
-                            font-size: 8px;
-                            color: rgb(161, 161, 170);
-                            horizontal-alignment: center;
-                        }
-                    }
-                }
-            }
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct PetalDefinition {
+    pub id: String,
+    pub title: String,
+    pub subtitle: String,
+    pub icon: String,
+    pub enabled: bool,
+}
+
+/// Dynamically calculates flower petal sizes and symmetrical coordinates for any number of petals N
+pub fn create_daisy_petals(definitions: &[PetalDefinition], center_x: f32, center_y: f32) -> Vec<PetalItem> {
+    let count = definitions.len().max(3);
+    let n = count as f32;
+
+    // Angle step: 360 / N
+    let step = 2.0 * std::f32::consts::PI / n;
+    let sin_half = (std::f32::consts::PI / n).sin();
+
+    // Geometric formula balancing petal diameter and radius within available window space
+    let d = (162.0 / (1.0 + sin_half * 0.95)).clamp(75.0, 115.0);
+    let s = (2.0 * d * sin_half * 0.95).clamp(65.0, 106.0);
+
+    definitions
+        .iter()
+        .enumerate()
+        .map(|(i, def)| {
+            // First petal is at top (-90 degrees / -PI/2)
+            let angle = -std::f32::consts::FRAC_PI_2 + (i as f32) * step;
+            let cx = center_x + d * angle.cos();
+            let cy = center_y + d * angle.sin();
+            let px = (cx - s / 2.0).round();
+            let py = (cy - s / 2.0).round();
+
+            PetalItem {
+                id: def.id.clone().into(),
+                title: def.title.clone().into(),
+                subtitle: def.subtitle.clone().into(),
+                icon: def.icon.clone().into(),
+                enabled: def.enabled,
+                pos_x: px,
+                pos_y: py,
+                size: s.round(),
+            }
+        })
+        .collect()
 }
 
 pub struct RadialMenuController {
@@ -492,10 +471,20 @@ impl RadialMenuController {
         let sender_clone = event_sender.clone();
         let win_weak_close = window.as_weak();
         window.on_close_requested(move || {
+            crate::platform::windows::mouse_hook::set_menu_closed();
             if let Some(win) = win_weak_close.upgrade() {
                 let _ = win.hide();
             }
             let _ = sender_clone.send(AppEvent::CloseMenu);
+        });
+
+        let win_weak_petal = window.as_weak();
+        window.on_petal_clicked(move |petal_id| {
+            if petal_id == "convert" {
+                if let Some(win) = win_weak_petal.upgrade() {
+                    win.set_is_submenu(true);
+                }
+            }
         });
 
         let win_weak = window.as_weak();
@@ -553,6 +542,43 @@ impl RadialMenuController {
         };
         self.window.set_file_size(size_str.into());
 
+        // 1. Initial 4 Daisy Petals (Expandable to N petals in the future)
+        let default_petals = vec![
+            PetalDefinition {
+                id: "convert".to_string(),
+                title: "Dönüştür".to_string(),
+                subtitle: "Görsel formatı".to_string(),
+                icon: "⚡".to_string(),
+                enabled: true,
+            },
+            PetalDefinition {
+                id: "action_2".to_string(),
+                title: "İşlem 2".to_string(),
+                subtitle: "Yakında".to_string(),
+                icon: "📦".to_string(),
+                enabled: false,
+            },
+            PetalDefinition {
+                id: "action_3".to_string(),
+                title: "İşlem 3".to_string(),
+                subtitle: "Yakında".to_string(),
+                icon: "🔒".to_string(),
+                enabled: false,
+            },
+            PetalDefinition {
+                id: "action_4".to_string(),
+                title: "İşlem 4".to_string(),
+                subtitle: "Yakında".to_string(),
+                icon: "✂️".to_string(),
+                enabled: false,
+            },
+        ];
+
+        let petals = create_daisy_petals(&default_petals, 180.0, 180.0);
+        let petal_model = Rc::new(VecModel::from(petals));
+        self.window.set_petals(ModelRc::from(petal_model));
+
+        // 2. Target formats for the conversion submenu
         let targets = SupportedImageFormat::targets_for(file.format);
         let items: Vec<TargetFormatItem> = targets
             .into_iter()
@@ -569,6 +595,7 @@ impl RadialMenuController {
         self.window.set_is_submenu(false);
         self.window.set_has_toast(false);
 
+        // 3. Center on mouse cursor (cursor is at center 180, 180 of the daisy disc)
         let half_w = 180;
         let half_h = 180;
         let pos_x = (x - half_w).max(20);
