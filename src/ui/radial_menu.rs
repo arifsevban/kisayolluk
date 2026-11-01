@@ -17,10 +17,12 @@ slint::slint! {
         title: string,
         subtitle: string,
         icon: string,
+        arrow: string,
         enabled: bool,
         pos_x: float,
         pos_y: float,
         size: float,
+        path_data: string,
     }
 
     export component RadialMenuWindow inherits Window {
@@ -53,6 +55,24 @@ slint::slint! {
         callback close_requested();
         callback open_folder_clicked();
 
+        pure function get_sector(mx: float, my: float, count: int) -> int {
+            if (count <= 0) {
+                return -1;
+            }
+            let dx = mx - 180.0;
+            let dy = my - 180.0;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 52.0 || dist > 154.0) {
+                return -1;
+            }
+            let a = Math.atan2(dy, dx) / 1deg; // -180 to 180 deg
+            let sector_span = 360.0 / count;
+            // Shift so sector 0 is centered at top (-90 degrees)
+            let shifted = a + 90.0 + (sector_span / 2.0);
+            let positive_angle = shifted < 0.0 ? shifted + 360.0 : (shifted >= 360.0 ? shifted - 360.0 : shifted);
+            return Math.floor(positive_angle / sector_span);
+        }
+
         forward-focus: key-handler;
 
         key-handler := FocusScope {
@@ -65,123 +85,140 @@ slint::slint! {
             }
         }
 
-        // Click outside closes the menu
-        TouchArea {
+        // ============================================
+        // 1. ANNULAR SECTOR RADIAL MENU (DONUT WEDGES)
+        // ============================================
+        if !root.is_submenu && !root.has_toast: menu-box := Rectangle {
             width: 100%;
             height: 100%;
-            clicked => {
-                root.close_requested();
+
+            property <int> hovered_sector: touch.has-hover ? root.get_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.petals.length) : -1;
+
+            // 1a. Curved Annular Sector Wedges
+            for petal[index] in root.petals: Path {
+                width: 360px;
+                height: 360px;
+                x: 0px;
+                y: 0px;
+                commands: petal.path_data;
+                fill: (menu-box.hovered_sector == index && petal.enabled)
+                    ? rgb(220, 121, 40)
+                    : (petal.enabled ? rgb(40, 43, 50) : rgb(24, 25, 29));
+                stroke: (menu-box.hovered_sector == index && petal.enabled)
+                    ? rgb(245, 158, 66)
+                    : (petal.enabled ? rgba(110, 115, 128, 0.45) : rgba(55, 58, 66, 0.35));
+                stroke-width: (menu-box.hovered_sector == index && petal.enabled) ? 1.8px : 1.2px;
             }
-        }
 
-        // ============================================
-        // 1. DAISY FLOWER RADIAL MENU (PAPATYA ÇİÇEĞİ)
-        // ============================================
-        if !root.is_submenu && !root.has_toast: Rectangle {
-            width: 100%;
-            height: 100%;
-
-            // 1a. Round Daisy Petals radiating around the cursor
+            // 1b. Petal Labels & Icons
             for petal[index] in root.petals: Rectangle {
                 x: petal.pos_x * 1px;
                 y: petal.pos_y * 1px;
                 width: petal.size * 1px;
                 height: petal.size * 1px;
-                border-radius: (petal.size / 2) * 1px;
-                background: petal.enabled
-                    ? (petal-touch.has-hover ? rgb(48, 48, 54) : rgb(28, 28, 32))
-                    : rgba(24, 24, 27, 0.72);
-                border-width: petal.enabled ? (petal-touch.has-hover ? 1.5px : 1.0px) : 1.0px;
-                border-color: petal.enabled
-                    ? (petal-touch.has-hover ? rgb(228, 228, 231) : rgba(113, 113, 122, 0.45))
-                    : rgba(63, 63, 70, 0.35);
-                drop-shadow-blur: 16px;
-                drop-shadow-color: rgba(0, 0, 0, 0.75);
-                clip: true;
-                animate background { duration: 140ms; }
-                animate border-color { duration: 140ms; }
+                background: transparent;
 
-                petal-touch := TouchArea {
-                    width: 100%;
-                    height: 100%;
-                    enabled: petal.enabled;
-                    clicked => {
-                        root.petal_clicked(petal.id);
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 2px;
+                    padding: 4px;
+
+                    if petal.arrow != "": Text {
+                        text: petal.arrow;
+                        font-size: 8px;
+                        color: (menu-box.hovered_sector == index && petal.enabled)
+                            ? white
+                            : (petal.enabled ? rgba(255, 255, 255, 0.75) : rgb(95, 100, 110));
+                        horizontal-alignment: center;
                     }
-
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 2px;
-                        padding: 8px;
-
-                        Text {
-                            text: petal.icon;
-                            font-size: petal.size > 90.0 ? 24px : 20px;
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: petal.title;
-                            font-size: petal.size > 90.0 ? 13px : 11px;
-                            font-weight: 700;
-                            color: petal.enabled
-                                ? (petal-touch.has-hover ? rgb(250, 250, 250) : rgb(228, 228, 231))
-                                : rgb(113, 113, 122);
-                            horizontal-alignment: center;
-                            overflow: elide;
-                        }
-                        if petal.subtitle != "": Text {
-                            text: petal.subtitle;
-                            font-size: petal.size > 90.0 ? 9px : 8px;
-                            color: petal.enabled ? rgb(161, 161, 170) : rgb(82, 82, 91);
-                            horizontal-alignment: center;
-                            overflow: elide;
-                        }
+                    Text {
+                        text: petal.icon;
+                        font-size: 20px;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: petal.title;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: (menu-box.hovered_sector == index && petal.enabled)
+                            ? white
+                            : (petal.enabled ? rgb(240, 240, 242) : rgb(113, 113, 122));
+                        horizontal-alignment: center;
+                        overflow: elide;
+                    }
+                    if petal.subtitle != "": Text {
+                        text: petal.subtitle;
+                        font-size: 8px;
+                        color: (menu-box.hovered_sector == index && petal.enabled)
+                            ? rgb(254, 243, 199)
+                            : (petal.enabled ? rgb(161, 161, 170) : rgb(82, 82, 91));
+                        horizontal-alignment: center;
+                        overflow: elide;
                     }
                 }
             }
 
-            // 1b. Central Floral Disc ("Papatya Göbeği" - Mouse cursor center)
+            // 1c. Central Disc ("Kısayolluk" center hub - cursor origin)
             Rectangle {
                 width: 96px;
                 height: 96px;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 border-radius: 48px;
-                background: rgb(18, 18, 21);
+                background: rgb(20, 22, 26);
                 border-width: 1.5px;
-                border-color: rgb(113, 113, 122);
+                border-color: rgb(75, 80, 92);
                 drop-shadow-blur: 14px;
-                drop-shadow-color: rgba(0, 0, 0, 0.75);
+                drop-shadow-color: rgba(0, 0, 0, 0.8);
                 clip: true;
 
-                TouchArea {
-                    clicked => { root.close_requested(); }
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 2px;
+                    padding-left: 6px;
+                    padding-right: 6px;
 
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 2px;
-                        padding-left: 6px;
-                        padding-right: 6px;
+                    Text {
+                        text: "Kısayolluk";
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: rgb(244, 244, 245);
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: root.file_name;
+                        font-size: 9px;
+                        color: rgb(212, 212, 216);
+                        horizontal-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: root.file_format + " • " + root.file_size;
+                        font-size: 8px;
+                        color: rgb(161, 161, 170);
+                        horizontal-alignment: center;
+                    }
+                }
+            }
 
-                        Text {
-                            text: "Kısayolluk";
-                            font-size: 10px;
-                            font-weight: 700;
-                            color: rgb(244, 244, 245);
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: root.file_name;
-                            font-size: 9px;
-                            color: rgb(212, 212, 216);
-                            horizontal-alignment: center;
-                            overflow: elide;
-                        }
-                        Text {
-                            text: root.file_format + " • " + root.file_size;
-                            font-size: 8px;
-                            color: rgb(161, 161, 170);
-                            horizontal-alignment: center;
+            // 1d. Master Interactive Area
+            touch := TouchArea {
+                width: 100%;
+                height: 100%;
+                mouse-cursor: (menu-box.hovered_sector >= 0 && menu-box.hovered_sector < root.petals.length && root.petals[menu-box.hovered_sector].enabled) ? pointer : default;
+
+                clicked => {
+                    let dx = (touch.mouse-x - 180px) / 1px;
+                    let dy = (touch.mouse-y - 180px) / 1px;
+                    let dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 154.0 || dist < 48.0) {
+                        root.close_requested();
+                    } else {
+                        let s = root.get_sector(touch.mouse-x / 1px, touch.mouse-y / 1px, root.petals.length);
+                        if (s >= 0 && s < root.petals.length) {
+                            if (root.petals[s].enabled) {
+                                root.petal_clicked(root.petals[s].id);
+                            }
                         }
                     }
                 }
@@ -422,39 +459,131 @@ pub struct PetalDefinition {
     pub enabled: bool,
 }
 
-/// Dynamically calculates flower petal sizes and symmetrical coordinates for any number of petals N
+/// Generates an SVG path for an annular sector (curved ring wedge) with rounded corners.
+pub fn generate_annular_wedge_path(
+    cx: f32,
+    cy: f32,
+    r_in: f32,
+    r_out: f32,
+    angle_start_rad: f32,
+    angle_end_rad: f32,
+    corner_radius: f32,
+) -> String {
+    let r_c = corner_radius.min((r_out - r_in) * 0.25);
+    let delta_out = r_c / r_out;
+    let delta_in = r_c / r_in;
+
+    let (sin_s, cos_s) = angle_start_rad.sin_cos();
+    let (sin_e, cos_e) = angle_end_rad.sin_cos();
+
+    // Sharp vertices used as quadratic bezier control points for rounded corners
+    let v1x = cx + r_out * cos_s;
+    let v1y = cy + r_out * sin_s;
+
+    let v2x = cx + r_out * cos_e;
+    let v2y = cy + r_out * sin_e;
+
+    let v3x = cx + r_in * cos_e;
+    let v3y = cy + r_in * sin_e;
+
+    let v4x = cx + r_in * cos_s;
+    let v4y = cy + r_in * sin_s;
+
+    // Straight edge endpoints
+    let e1x = cx + (r_out - r_c) * cos_s;
+    let e1y = cy + (r_out - r_c) * sin_s;
+
+    let e2x = cx + (r_out - r_c) * cos_e;
+    let e2y = cy + (r_out - r_c) * sin_e;
+
+    let e3x = cx + (r_in + r_c) * cos_e;
+    let e3y = cy + (r_in + r_c) * sin_e;
+
+    let e4x = cx + (r_in + r_c) * cos_s;
+    let e4y = cy + (r_in + r_c) * sin_s;
+
+    // Arc endpoints
+    let (sin_s_out, cos_s_out) = (angle_start_rad + delta_out).sin_cos();
+    let a1x = cx + r_out * cos_s_out;
+    let a1y = cy + r_out * sin_s_out;
+
+    let (sin_e_out, cos_e_out) = (angle_end_rad - delta_out).sin_cos();
+    let a2x = cx + r_out * cos_e_out;
+    let a2y = cy + r_out * sin_e_out;
+
+    let (sin_e_in, cos_e_in) = (angle_end_rad - delta_in).sin_cos();
+    let a3x = cx + r_in * cos_e_in;
+    let a3y = cy + r_in * sin_e_in;
+
+    let (sin_s_in, cos_s_in) = (angle_start_rad + delta_in).sin_cos();
+    let a4x = cx + r_in * cos_s_in;
+    let a4y = cy + r_in * sin_s_in;
+
+    format!(
+        "M {:.1} {:.1} L {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1} A {:.1} {:.1} 0 0 1 {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1} L {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1} A {:.1} {:.1} 0 0 0 {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1} Z",
+        e4x, e4y,
+        e1x, e1y,
+        v1x, v1y, a1x, a1y,
+        r_out, r_out, a2x, a2y,
+        v2x, v2y, e2x, e2y,
+        e3x, e3y,
+        v3x, v3y, a3x, a3y,
+        r_in, r_in, a4x, a4y,
+        v4x, v4y, e4x, e4y,
+    )
+}
+
+/// Dynamically calculates annular wedge sectors and coordinates for any number of petals N
 pub fn create_daisy_petals(definitions: &[PetalDefinition], center_x: f32, center_y: f32) -> Vec<PetalItem> {
     let count = definitions.len().max(3);
     let n = count as f32;
 
-    // Angle step: 360 / N
     let step = 2.0 * std::f32::consts::PI / n;
-    let sin_half = (std::f32::consts::PI / n).sin();
+    // Angular gap between sectors (approx 3.5 degrees)
+    let gap = (3.5_f32).to_radians();
 
-    // Geometric formula balancing petal diameter and radius within available window space
-    let d = (162.0 / (1.0 + sin_half * 0.95)).clamp(75.0, 115.0);
-    let s = (2.0 * d * sin_half * 0.95).clamp(65.0, 106.0);
+    let r_in = 54.0_f32;
+    let r_out = 152.0_f32;
+    let r_mid = (r_in + r_out) / 2.0; // 103.0
+    let content_size = 72.0_f32;
 
     definitions
         .iter()
         .enumerate()
         .map(|(i, def)| {
-            // First petal is at top (-90 degrees / -PI/2)
-            let angle = -std::f32::consts::FRAC_PI_2 + (i as f32) * step;
-            let cx = center_x + d * angle.cos();
-            let cy = center_y + d * angle.sin();
-            let px = (cx - s / 2.0).round();
-            let py = (cy - s / 2.0).round();
+            // First sector is centered at top (-90 degrees / -PI/2)
+            let mid_angle = -std::f32::consts::FRAC_PI_2 + (i as f32) * step;
+            let start_angle = mid_angle - (step - gap) / 2.0;
+            let end_angle = mid_angle + (step - gap) / 2.0;
+
+            let path_data = generate_annular_wedge_path(
+                center_x, center_y, r_in, r_out, start_angle, end_angle, 6.0,
+            );
+
+            let cx = center_x + r_mid * mid_angle.cos();
+            let cy = center_y + r_mid * mid_angle.sin();
+            let px = (cx - content_size / 2.0).round();
+            let py = (cy - content_size / 2.0).round();
+
+            let arrow = match i {
+                0 => "▲",
+                1 => "▶",
+                2 => "▼",
+                3 => "◀",
+                _ => "",
+            };
 
             PetalItem {
                 id: def.id.clone().into(),
                 title: def.title.clone().into(),
                 subtitle: def.subtitle.clone().into(),
                 icon: def.icon.clone().into(),
+                arrow: arrow.into(),
                 enabled: def.enabled,
                 pos_x: px,
                 pos_y: py,
-                size: s.round(),
+                size: content_size,
+                path_data: path_data.into(),
             }
         })
         .collect()

@@ -95,3 +95,35 @@ fn test_daisy_future_expandability_arbitrary_counts() {
     }
 }
 
+#[test]
+fn test_annular_wedge_path_format() {
+    let defs = vec![
+        PetalDefinition {
+            id: "convert".to_string(),
+            title: "Dönüştür".to_string(),
+            subtitle: "Görsel formatı".to_string(),
+            icon: "⚡".to_string(),
+            enabled: true,
+        },
+        PetalDefinition {
+            id: "action_2".to_string(),
+            title: "İşlem 2".to_string(),
+            subtitle: "Yakında".to_string(),
+            icon: "📦".to_string(),
+            enabled: false,
+        },
+    ];
+
+    let petals = create_daisy_petals(&defs, 180.0, 180.0);
+    for p in &petals {
+        let path = p.path_data.as_str();
+        assert!(path.starts_with('M'), "Path must start with M (moveto)");
+        assert!(path.ends_with('Z'), "Path must end with Z (closepath)");
+        assert!(path.contains(" A "), "Path must contain elliptical arc command");
+        assert!(path.contains(" Q "), "Path must contain quadratic bezier rounded corners");
+    }
+
+    assert_eq!(petals[0].arrow.as_str(), "▲");
+    assert_eq!(petals[1].arrow.as_str(), "▶");
+}
+
